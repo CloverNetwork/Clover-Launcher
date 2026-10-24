@@ -1,0 +1,257 @@
+/*
+ * Semantic tokens. Contrast figures are against --bg-window in each appearance.
+ *   --text            ~15:1 light, ~11:1 dark
+ *   --text-secondary  4.7:1 light, 5.9:1 dark (meets 4.5:1 for 13px text)
+ *   --play            white label on #1f7a34 is 5.4:1
+ *   --danger          5.7:1 light, 6.0:1 dark
+ */
+:root {
+  color-scheme: light dark;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --bg-window: #ffffff;
+  --bg-sidebar: #f0f0f2;
+  --bg-sheet: #f6f6f7;
+  --bg-log: #f7f7f8;
+  --bg-control: rgba(0, 0, 0, 0.05);
+  --bg-control-hover: rgba(0, 0, 0, 0.09);
+  --bg-row-selected: rgba(0, 0, 0, 0.08);
+  --text: rgba(0, 0, 0, 0.85);
+  --text-secondary: rgba(0, 0, 0, 0.55);
+  --separator: rgba(0, 0, 0, 0.1);
+  --accent: #0a7aff;
+  --on-accent: #ffffff;
+  --play: #1f7a34;
+  --play-hover: #1a6a2d;
+  --on-play: #ffffff;
+  --danger: #c4281c;
+  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--accent) 50%, transparent);
+
+  --radius-control: 6px;
+  --radius-panel: 10px;
+  --toolbar-height: 52px;
+  /* Room for the traffic lights when the title bar overlays content. */
+  --traffic-lights: 78px;
+}
+
+@supports (color: -apple-system-control-accent) {
+  :root {
+    --accent: -apple-system-control-accent;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-window: #1e1e1e;
+    --bg-sidebar: #2a2a2c;
+    --bg-sheet: #262628;
+    --bg-log: #161616;
+    --bg-control: rgba(255, 255, 255, 0.08);
+    --bg-control-hover: rgba(255, 255, 255, 0.12);
+    --bg-row-selected: rgba(255, 255, 255, 0.1);
+    --text: rgba(255, 255, 255, 0.85);
+    --text-secondary: rgba(255, 255, 255, 0.55);
+    --separator: rgba(255, 255, 255, 0.1);
+    --danger: #ff6b5e;
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --text-secondary: color-mix(in srgb, var(--text) 85%, transparent);
+    --separator: color-mix(in srgb, var(--text) 40%, transparent);
+  }
+}
+
+/* On macOS the sidebar shows the window's vibrancy material. */
+:root[data-platform="macos"] {
+  --bg-sidebar: transparent;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root[data-platform="macos"] {
+    --bg-sidebar: #f0f0f2;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) and (prefers-color-scheme: dark) {
+  :root[data-platform="macos"] {
+    --bg-sidebar: #2a2a2c;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  font: 13px/1.38 var(--font);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: default;
+}
+
+body {
+  background: var(--bg-window);
+}
+
+:root[data-platform="macos"] body.vibrant {
+  background: transparent;
+}
+
+input,
+select,
+textarea {
+  -webkit-user-select: text;
+  user-select: text;
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: default;
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* Shared controls */
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 3px 12px;
+  border: none;
+  border-radius: var(--radius-control);
+  background: var(--bg-control);
+  font-weight: 500;
+}
+
+.button:hover:not(:disabled) {
+  background: var(--bg-control-hover);
+}
+
+.button:disabled {
+  opacity: 0.45;
+}
+
+.button.default {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.button.destructive {
+  color: var(--danger);
+}
+
+.icon-button {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.icon-button:hover:not(:disabled) {
+  background: var(--bg-control-hover);
+  color: var(--text);
+}
+
+.icon-button[aria-pressed="true"] {
+  background: var(--bg-control);
+  color: var(--text);
+}
+
+.field {
+  width: 100%;
+  min-height: 24px;
+  padding: 3px 8px;
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-control);
+  background: var(--bg-window);
+}
+
+.field:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+
+.secondary {
+  color: var(--text-secondary);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Sheets slide down from the toolbar, like macOS document sheets. */
+dialog.sheet {
+  width: min(440px, calc(100vw - 32px));
+  margin: var(--toolbar-height) auto auto;
+  padding: 20px;
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-panel);
+  background: var(--bg-sheet);
+  color: var(--text);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.25);
+  animation: sheet-in 180ms ease-out;
+}
+
+dialog.sheet::backdrop {
+  background: rgba(0, 0, 0, 0.15);
+}
+
+dialog.sheet h2 {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+dialog.sheet .actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateY(-12px);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
