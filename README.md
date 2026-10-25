@@ -1,4 +1,6 @@
-# Launcher
+<img src="src-tauri/icons/128x128.png" width="64" alt="">
+
+# Clover Launcher
 
 A Minecraft: Java Edition launcher built with Tauri 2, Rust and SvelteKit (Svelte 5).
 
@@ -30,7 +32,20 @@ pnpm tauri dev
 | `src/lib/components/` | Sidebar, detail view, sheets, game log, generated block icons |
 | `src/routes/settings/` | The settings window |
 
-Data lives in `~/Library/Application Support/dev.blackdevlabs.mclauncher` (macOS).
+Data lives in `~/Library/Application Support/dev.blackdevlabs.clover` (macOS).
+
+## Branding
+
+`branding/clover-logo.svg` is the original mark. `branding/app-icon.svg` places it on the macOS
+icon grid (824 pt rounded square on a 1024 canvas) in clover green. Regenerate every icon size
+after editing it:
+
+```bash
+pnpm tauri icon branding/app-icon.svg
+```
+
+Inside the app the mark appears only on the welcome screen (`CloverLogo.svelte`), in one colour
+so it follows light and dark appearance.
 
 ## Design notes
 
@@ -44,7 +59,7 @@ Built against Apple's Human Interface Guidelines for macOS:
 - Errors appear inline in the detail view. Only the irreversible Delete uses an alert.
 - Settings opens in its own window (⌘,) and applies changes immediately.
 - Signature element: each instance gets a pixel block face generated from its ID
-  (`BlockIcon.svelte`). Everything else stays quiet.
+  (`BlockIcon.svelte`). Everything else stays quiet, and the logo isn't repeated through the app.
 
 ## Next steps
 

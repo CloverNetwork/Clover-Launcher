@@ -3,6 +3,7 @@
   import { events } from "$lib/api";
   import { launcher } from "$lib/launcher.svelte";
   import AccountSheet from "$lib/components/AccountSheet.svelte";
+  import CloverLogo from "$lib/components/CloverLogo.svelte";
   import GameLog from "$lib/components/GameLog.svelte";
   import Icon from "$lib/components/Icon.svelte";
   import InstanceDetail from "$lib/components/InstanceDetail.svelte";
@@ -80,7 +81,8 @@
       {/if}
     {:else}
       <div class="empty">
-        <h1>No Instances Yet</h1>
+        <span class="logo"><CloverLogo size={56} /></span>
+        <h1>Welcome to Clover</h1>
         <p class="secondary">Create an instance to pick a Minecraft version and start playing.</p>
         <button class="button default" onclick={() => (launcher.newInstanceOpen = true)}>New Instance</button>
       </div>
@@ -150,6 +152,12 @@
     gap: 8px;
     padding: 32px;
     text-align: center;
+  }
+
+  .empty .logo {
+    display: flex;
+    margin-bottom: 8px;
+    color: var(--play);
   }
 
   .empty h1 {

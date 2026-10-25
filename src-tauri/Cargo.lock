@@ -499,6 +499,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "clover-launcher"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "hex",
+ "keyring",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "sha1",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+ "tauri-plugin-opener",
+ "thiserror 2.0.21",
+ "tokio",
+ "uuid",
+ "zip",
+]
+
+[[package]]
 name = "combine"
 version = "4.6.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2124,27 +2145,6 @@ dependencies = [
  "log",
  "tendril",
  "web_atoms",
-]
-
-[[package]]
-name = "mc-launcher"
-version = "0.1.0"
-dependencies = [
- "futures",
- "hex",
- "keyring",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "sha1",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
- "tauri-plugin-opener",
- "thiserror 2.0.21",
- "tokio",
- "uuid",
- "zip",
 ]
 
 [[package]]

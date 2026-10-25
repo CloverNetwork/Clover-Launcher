@@ -19,7 +19,7 @@ pub const CLIENT_ID: &str = "00000000-0000-0000-0000-000000000000";
 const SCOPE: &str = "XboxLive.signin offline_access";
 const DEVICE_CODE_URL: &str = "https://login.microsoftonline.com/consumers/oauth2/v2.0/devicecode";
 const TOKEN_URL: &str = "https://login.microsoftonline.com/consumers/oauth2/v2.0/token";
-const KEYRING_SERVICE: &str = "dev.blackdevlabs.mclauncher";
+const KEYRING_SERVICE: &str = "dev.blackdevlabs.clover";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

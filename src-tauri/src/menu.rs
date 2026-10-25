@@ -6,7 +6,7 @@ use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder, Wry};
 pub fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
     let item = |id: &str, label: &str, accel: Option<&str>| MenuItem::with_id(app, id, label, true, accel);
 
-    let app_menu = SubmenuBuilder::new(app, "Launcher")
+    let app_menu = SubmenuBuilder::new(app, "Clover Launcher")
         .about(Some(AboutMetadata::default()))
         .separator()
         .item(&item("settings", "Settings…", Some("CmdOrCtrl+,"))?)

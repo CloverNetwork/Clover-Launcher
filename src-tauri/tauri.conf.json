@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Launcher",
+  "productName": "Clover Launcher",
   "version": "0.1.0",
-  "identifier": "dev.blackdevlabs.mclauncher",
+  "identifier": "dev.blackdevlabs.clover",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
@@ -14,7 +14,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Launcher",
+        "title": "Clover Launcher",
         "width": 960,
         "height": 620,
         "minWidth": 640,
