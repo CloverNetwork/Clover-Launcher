@@ -38,7 +38,7 @@ pub fn build_command(paths: &Paths, instance: &Instance, version: &Resolved, ses
         ("auth_session", session.access_token.clone()),
         ("auth_xuid", session.xuid.clone()),
         ("clientid", crate::auth::CLIENT_ID.to_string()),
-        ("user_type", "msa".into()),
+        ("user_type", if session.profile.offline { "legacy" } else { "msa" }.into()),
         ("user_properties", "{}".into()),
         ("version_name", version.id.clone()),
         ("version_type", version.kind.clone()),

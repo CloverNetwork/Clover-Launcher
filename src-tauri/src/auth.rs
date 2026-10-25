@@ -26,6 +26,9 @@ const KEYRING_SERVICE: &str = "dev.blackdevlabs.clover";
 pub struct Profile {
     pub uuid: String,
     pub name: String,
+    /// A development-only offline account; see `sign_in_offline`.
+    #[serde(default)]
+    pub offline: bool,
 }
 
 /// What the game needs at launch. Never sent to the frontend.
@@ -110,6 +113,13 @@ pub fn current(paths: &Paths) -> Option<Profile> {
 /// Exchanges the stored refresh token for a fresh Minecraft session.
 pub async fn session(client: &Client, paths: &Paths) -> Result<Session> {
     let profile = current(paths).ok_or_else(|| msg("Sign in with a Microsoft account to play."))?;
+    if profile.offline {
+        if !OFFLINE_ALLOWED {
+            return Err(msg("Offline accounts only work in development builds. Sign in with Microsoft to play."));
+        }
+        // The game accepts any token; it just can't reach Mojang's services with it.
+        return Ok(Session { profile, access_token: "0".into(), xuid: String::new() });
+    }
     let entry = keyring::Entry::new(KEYRING_SERVICE, &profile.uuid)?;
     let refresh = entry.get_password().map_err(|_| msg("Your session ended. Sign in again to play."))?;
     let res = client
@@ -128,6 +138,34 @@ pub async fn session(client: &Client, paths: &Paths) -> Result<Session> {
     let token: MsToken = res.json().await?;
     entry.set_password(&token.refresh_token)?;
     minecraft_session(client, &token.access_token).await
+}
+
+/// Offline accounts exist so the launcher can be tested before Microsoft approves the
+/// app's Minecraft API access. They're compiled out of release builds, so a shipped Clover
+/// always requires an account that owns the game.
+pub const OFFLINE_ALLOWED: bool = cfg!(debug_assertions);
+
+/// Signs in with just a player name, like a vanilla server in offline mode.
+pub fn sign_in_offline(paths: &Paths, name: &str) -> Result<Profile> {
+    if !OFFLINE_ALLOWED {
+        return Err(msg("Offline accounts only work in development builds."));
+    }
+    let name = name.trim();
+    let valid = (3..=16).contains(&name.len()) && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+    if !valid {
+        return Err(msg("Use 3 to 16 letters, numbers or underscores."));
+    }
+    let profile = Profile { uuid: offline_uuid(name), name: name.into(), offline: true };
+    std::fs::write(paths.account_file(), serde_json::to_vec(&profile)?)?;
+    Ok(profile)
+}
+
+/// The UUID an offline-mode server gives a player: Java's `UUID.nameUUIDFromBytes`
+/// (MD5, version 3) of "OfflinePlayer:<name>", so worlds keep the same player data.
+fn offline_uuid(name: &str) -> String {
+    use md5::{Digest, Md5};
+    let hash: [u8; 16] = Md5::digest(format!("OfflinePlayer:{name}")).into();
+    uuid::Builder::from_md5_bytes(hash).into_uuid().simple().to_string()
 }
 
 pub fn sign_out(paths: &Paths) -> Result<()> {
@@ -232,8 +270,28 @@ async fn minecraft_session(client: &Client, ms_access_token: &str) -> Result<Ses
     let profile: McProfile = res.error_for_status()?.json().await?;
 
     Ok(Session {
-        profile: Profile { uuid: profile.id, name: profile.name },
+        profile: Profile { uuid: profile.id, name: profile.name, offline: false },
         access_token: login.access_token,
         xuid: xui.xid.clone().unwrap_or_default(),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn offline_uuid_matches_vanilla_servers() {
+        // Known value from an offline-mode server for the player "Notch".
+        assert_eq!(super::offline_uuid("Notch"), "b50ad385829d3141a2167e7d7539ba7f");
+    }
+
+    #[test]
+    fn offline_accounts_only_in_debug_builds() {
+        let dir = std::env::temp_dir().join(format!("clover-offline-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let paths = crate::paths::Paths::at(dir.clone());
+        let result = super::sign_in_offline(&paths, "Tester");
+        assert_eq!(result.is_ok(), cfg!(debug_assertions));
+        assert!(super::sign_in_offline(&paths, "no spaces").is_err());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 }

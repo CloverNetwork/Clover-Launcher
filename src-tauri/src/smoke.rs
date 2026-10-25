@@ -53,7 +53,7 @@ fn instance(loader: &str, game: &str, loader_version: Option<String>) -> Instanc
 
 fn session() -> Session {
     Session {
-        profile: Profile { uuid: "00000000000000000000000000000000".into(), name: "Smoke".into() },
+        profile: Profile { uuid: "00000000000000000000000000000000".into(), name: "Smoke".into(), offline: true },
         access_token: "0".into(),
         xuid: String::new(),
     }

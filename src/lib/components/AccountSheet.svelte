@@ -9,6 +9,22 @@
   let error = $state<string | null>(null);
   let starting = $state(false);
   let copied = $state(false);
+  let offlineName = $state("");
+
+  /** Offline accounts are for testing before Microsoft approves the app; release builds don't offer them. */
+  const offlineAllowed = import.meta.env.DEV;
+  const validOfflineName = $derived(/^[A-Za-z0-9_]{3,16}$/.test(offlineName.trim()));
+
+  async function signInOffline(e: SubmitEvent) {
+    e.preventDefault();
+    error = null;
+    try {
+      launcher.account = await api.signInOffline(offlineName);
+      launcher.accountOpen = false;
+    } catch (err) {
+      error = errorText(err);
+    }
+  }
 
   $effect(() => {
     if (launcher.accountOpen) {
@@ -57,7 +73,7 @@
       <BlockIcon seed={launcher.account.uuid} size={40} />
       <div>
         <strong>{launcher.account.name}</strong>
-        <p class="secondary">Microsoft account</p>
+        <p class="secondary">{launcher.account.offline ? "Offline account (development only)" : "Microsoft account"}</p>
       </div>
     </div>
     <div class="actions">
@@ -86,6 +102,29 @@
       <button class="button" onclick={() => (launcher.accountOpen = false)}>Cancel</button>
       <button class="button default" disabled={starting} onclick={signIn}>Sign In with Microsoft</button>
     </div>
+
+    {#if offlineAllowed}
+      <form class="offline" onsubmit={signInOffline}>
+        <h3>Offline Account <span class="badge">Development</span></h3>
+        <p class="secondary">
+          For testing until Microsoft sign-in is set up. Online servers and Realms won't accept it, and release builds
+          don't include it.
+        </p>
+        <div class="offline-row">
+          <label class="visually-hidden" for="offline-name">Player name</label>
+          <input
+            id="offline-name"
+            class="field"
+            bind:value={offlineName}
+            placeholder="Player name"
+            maxlength="16"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <button type="submit" class="button" disabled={!validOfflineName}>Use Offline</button>
+        </div>
+      </form>
+    {/if}
   {/if}
 </dialog>
 
@@ -121,5 +160,40 @@
   .error {
     margin-top: 12px;
     color: var(--danger);
+  }
+
+  .offline {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--separator);
+  }
+
+  h3 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 4px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .badge {
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: var(--bg-control);
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 500;
+  }
+
+  .offline-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  .offline-row .button {
+    flex: none;
+    white-space: nowrap;
   }
 </style>

@@ -177,6 +177,11 @@ async fn finish_sign_in(state: State<'_, AppState>, code: auth::DeviceCode) -> R
 }
 
 #[tauri::command]
+fn sign_in_offline(state: State<'_, AppState>, name: String) -> Result<auth::Profile> {
+    auth::sign_in_offline(&state.paths, &name)
+}
+
+#[tauri::command]
 fn sign_out(state: State<'_, AppState>) -> Result<()> {
     auth::sign_out(&state.paths)
 }
@@ -220,6 +225,7 @@ pub fn run() {
             get_account,
             begin_sign_in,
             finish_sign_in,
+            sign_in_offline,
             sign_out,
             open_settings,
         ])

@@ -25,7 +25,7 @@ export type LoaderSource = {
 };
 export type LoaderVersion = { version: string; label: string; stable: boolean };
 export type Settings = { javaPath: string; memoryMb: number; loaderSources: LoaderSource[] };
-export type Profile = { uuid: string; name: string };
+export type Profile = { uuid: string; name: string; offline: boolean };
 export type DeviceCode = {
   userCode: string;
   deviceCode: string;
@@ -61,6 +61,8 @@ export const api = {
   getAccount: () => invoke<Profile | null>("get_account"),
   beginSignIn: () => invoke<DeviceCode>("begin_sign_in"),
   finishSignIn: (code: DeviceCode) => invoke<Profile>("finish_sign_in", { code }),
+  /** Development builds only; release builds refuse it. */
+  signInOffline: (name: string) => invoke<Profile>("sign_in_offline", { name }),
   signOut: () => invoke<void>("sign_out"),
   openSettings: () => invoke<void>("open_settings"),
 };
