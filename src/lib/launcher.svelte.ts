@@ -42,6 +42,7 @@ class Launcher {
   accountOpen = $state(false);
   skinsOpen = $state(false);
   modsOpen = $state(false);
+  importOpen = $state(false);
   /** Bumped when mods change, so lists showing them reload. */
   modsRevision = $state(0);
 
@@ -140,6 +141,11 @@ class Launcher {
 
   async createFromProfile(name: string, path: string) {
     await this.select(await api.createInstanceFromProfile(name, path));
+  }
+
+  /** Shows a freshly imported instance. */
+  async showImported(instance: Instance) {
+    await this.select(instance);
   }
 
   private async select(instance: Instance) {

@@ -18,11 +18,11 @@ use crate::error::{Result, msg};
 use crate::instances::Instance;
 use crate::paths::Paths;
 
-const MODRINTH: &str = "https://api.modrinth.com/v2";
-const CURSEFORGE: &str = "https://api.curseforge.com/v1";
-const CURSEFORGE_MINECRAFT: u32 = 432;
+pub(crate) const MODRINTH: &str = "https://api.modrinth.com/v2";
+pub(crate) const CURSEFORGE: &str = "https://api.curseforge.com/v1";
+pub(crate) const CURSEFORGE_MINECRAFT: u32 = 432;
 const CURSEFORGE_MODS_CLASS: u32 = 6;
-const PAGE_SIZE: u32 = 20;
+pub(crate) const PAGE_SIZE: u32 = 20;
 /// Dependencies of dependencies are followed, but not forever.
 const MAX_DEPENDENCY_DEPTH: usize = 6;
 
@@ -108,13 +108,20 @@ pub struct Sites<'a> {
 }
 
 impl Sites<'_> {
-    fn curseforge(&self, url: String) -> Result<RequestBuilder> {
-        let key = self.curseforge_key.ok_or_else(|| msg("CurseForge needs an API key. Add one in Settings."))?;
-        Ok(self.client.get(url).header("x-api-key", key))
+    pub(crate) fn curseforge(&self, url: String) -> Result<RequestBuilder> {
+        Ok(self.client.get(url).header("x-api-key", self.curseforge_key()?))
+    }
+
+    pub(crate) fn curseforge_post(&self, url: String) -> Result<RequestBuilder> {
+        Ok(self.client.post(url).header("x-api-key", self.curseforge_key()?))
+    }
+
+    fn curseforge_key(&self) -> Result<&str> {
+        self.curseforge_key.ok_or_else(|| msg("CurseForge needs an API key. Add one in Settings."))
     }
 }
 
-async fn json(request: RequestBuilder) -> Result<Value> {
+pub(crate) async fn json(request: RequestBuilder) -> Result<Value> {
     let res = request.send().await?;
     match res.status().as_u16() {
         // The hint about approved third-party keys sits next to wherever this shows.
@@ -124,7 +131,7 @@ async fn json(request: RequestBuilder) -> Result<Value> {
     }
 }
 
-fn text(value: &Value, key: &str) -> String {
+pub(crate) fn text(value: &Value, key: &str) -> String {
     value[key].as_str().unwrap_or_default().to_string()
 }
 
@@ -318,7 +325,7 @@ fn load_records(paths: &Paths, instance: &Instance) -> Vec<InstalledMod> {
     std::fs::read(records_file(paths, instance)).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default()
 }
 
-fn save_records(paths: &Paths, instance: &Instance, records: &[InstalledMod]) -> Result<()> {
+pub(crate) fn save_records(paths: &Paths, instance: &Instance, records: &[InstalledMod]) -> Result<()> {
     std::fs::write(records_file(paths, instance), serde_json::to_vec_pretty(records)?)?;
     Ok(())
 }

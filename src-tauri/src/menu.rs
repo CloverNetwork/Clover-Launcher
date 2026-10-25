@@ -27,6 +27,7 @@ pub fn build(app: &AppHandle, accounts: &Accounts) -> tauri::Result<Menu<Wry>> {
         .build()?;
     let file = SubmenuBuilder::new(app, "File")
         .item(&item("new_instance", "New Instance…", Some("CmdOrCtrl+N"))?)
+        .item(&item("import_modpack", "Import Modpack…", Some("CmdOrCtrl+Shift+N"))?)
         .separator()
         .item(&item("show_folder", "Show in Finder", Some("CmdOrCtrl+Shift+R"))?)
         .separator()

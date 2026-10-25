@@ -64,6 +64,42 @@ impl Reporter for AppReporter {
 /// The client jar on the classpath, named after the profile as the official launcher does.
 /// Loaders rely on the name: NeoForge and Forge skip `${version_name}.jar` when they
 /// build their module layer, so a jar named after the vanilla version would clash.
+/// Progress for a modpack import, sent as `import-progress` since there's no instance
+/// to name until the pack has been read.
+pub struct ImportReporter {
+    app: AppHandle,
+    last_emitted: usize,
+}
+
+impl ImportReporter {
+    pub fn new(app: AppHandle) -> Self {
+        Self { app, last_emitted: 0 }
+    }
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ImportProgress<'a> {
+    stage: Option<&'a str>,
+    done: usize,
+    total: usize,
+}
+
+impl Reporter for ImportReporter {
+    fn stage(&mut self, text: &str) {
+        let _ = self.app.emit("import-progress", ImportProgress { stage: Some(text), done: 0, total: 0 });
+    }
+
+    fn files(&mut self, done: usize, total: usize) {
+        if done == total || done < self.last_emitted || done - self.last_emitted >= (total / 100).max(1) {
+            self.last_emitted = done;
+            let _ = self.app.emit("import-progress", ImportProgress { stage: None, done, total });
+        }
+    }
+
+    fn log(&mut self, _: String) {}
+}
+
 pub fn client_jar_path(paths: &Paths, resolved: &Resolved) -> PathBuf {
     profile::jar_path(paths, &resolved.id)
 }

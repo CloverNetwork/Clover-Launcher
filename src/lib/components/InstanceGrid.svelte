@@ -56,6 +56,7 @@
         <span class="plus"><Icon name="plus" size={28} /></span>
         <span class="name">New Instance</span>
       </button>
+      <button class="import-link" onclick={() => (launcher.importOpen = true)}>Import Modpack…</button>
     </li>
   </ul>
 </section>
@@ -177,6 +178,19 @@
 
   .card.add:hover .open {
     color: var(--text);
+  }
+
+  .import-link {
+    margin-bottom: 12px;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--accent);
+    font-size: 11px;
+  }
+
+  .import-link:hover {
+    text-decoration: underline;
   }
 
   .plus {

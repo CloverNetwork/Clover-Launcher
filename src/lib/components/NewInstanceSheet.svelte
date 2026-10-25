@@ -213,6 +213,16 @@
     {/if}
 
     <div class="actions">
+      <button
+        type="button"
+        class="button import"
+        onclick={() => {
+          launcher.newInstanceOpen = false;
+          launcher.importOpen = true;
+        }}
+      >
+        Import Modpack…
+      </button>
       <button type="button" class="button" onclick={() => (launcher.newInstanceOpen = false)}>Cancel</button>
       <button type="submit" class="button default" disabled={!canCreate}>Create</button>
     </div>
@@ -270,6 +280,10 @@
   .unavailable {
     margin: 0;
     font-size: 13px;
+  }
+
+  .import {
+    margin-right: auto;
   }
 
   .error {

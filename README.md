@@ -4,7 +4,8 @@ A Minecraft: Java Edition launcher built with Tauri, Rust and Svelte.
 
 - Vanilla, Fabric, Quilt, Forge, NeoForge, Legacy Fabric, Ornithe and Babric
 - Import any launcher profile JSON for other loaders
-- Mods from Modrinth and CurseForge, with dependencies (CurseForge needs an API key in Settings)
+- Mods from Modrinth and CurseForge, with dependencies and updates (CurseForge needs an API key in Settings)
+- Modpacks from Modrinth and CurseForge, or a `.mrpack` / CurseForge zip from disk
 - Multiple Microsoft accounts
 - Skins and capes
 

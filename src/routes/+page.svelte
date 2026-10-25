@@ -8,6 +8,7 @@
   import CloverLogo from "$lib/components/CloverLogo.svelte";
   import GameLog from "$lib/components/GameLog.svelte";
   import Icon from "$lib/components/Icon.svelte";
+  import ImportModpackSheet from "$lib/components/ImportModpackSheet.svelte";
   import InstanceDetail from "$lib/components/InstanceDetail.svelte";
   import InstanceGrid from "$lib/components/InstanceGrid.svelte";
   import NewInstanceSheet from "$lib/components/NewInstanceSheet.svelte";
@@ -17,6 +18,7 @@
 
   const menuActions: Record<string, () => void> = {
     new_instance: () => (launcher.newInstanceOpen = true),
+    import_modpack: () => (launcher.importOpen = true),
     play: () => launcher.play(),
     stop: () => launcher.stop(),
     show_folder: () => launcher.showFolder(),
@@ -180,7 +182,10 @@
         <span class="logo"><CloverLogo size={56} /></span>
         <h1>Welcome to Clover</h1>
         <p class="secondary">Create an instance to pick a Minecraft version and start playing.</p>
-        <button class="button default" onclick={() => (launcher.newInstanceOpen = true)}>New Instance</button>
+        <div class="empty-actions">
+          <button class="button" onclick={() => (launcher.importOpen = true)}>Import Modpack…</button>
+          <button class="button default" onclick={() => (launcher.newInstanceOpen = true)}>New Instance</button>
+        </div>
       </div>
     {/if}
   </main>
@@ -190,6 +195,7 @@
 <AccountSheet />
 <WardrobeSheet />
 <ModBrowserSheet />
+<ImportModpackSheet />
 
 <style>
   .window {
@@ -309,6 +315,11 @@
     margin: 0;
     font-size: 17px;
     font-weight: 600;
+  }
+
+  .empty-actions {
+    display: flex;
+    gap: 8px;
   }
 
   .empty p {

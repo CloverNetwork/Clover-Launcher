@@ -244,3 +244,41 @@ async fn relaunch_downloads_nothing() {
     println!("  verify: replaced {repaired} files");
     assert_eq!(repaired, 1, "Verify Game Files should replace exactly the damaged jar");
 }
+
+/// Imports a .mrpack from disk and boots it. Point `CLOVER_TEST_PACK` at a pack file:
+/// `CLOVER_TEST_PACK=pack.mrpack cargo test boots_imported_pack -- --ignored --nocapture`
+#[tokio::test]
+#[ignore]
+async fn boots_imported_pack() {
+    let pack = std::env::var("CLOVER_TEST_PACK").expect("set CLOVER_TEST_PACK");
+    let client = Client::builder().user_agent("CloverNetwork/Clover-Launcher/test").build().unwrap();
+    let paths = Paths::at(root());
+    let sites = crate::mods::Sites { client: &client, curseforge_key: None };
+    let imported = crate::modpacks::import(&sites, &paths, std::path::Path::new(&pack), &mut Print).await.unwrap();
+    let instance = imported.instance;
+    println!("  imported {} ({} {:?}, {} mods)", instance.name, instance.loader, instance.loader_version,
+        crate::mods::installed(&paths, &instance).unwrap().len());
+    let installed = crate::install::install(&client, &paths, &Settings::default(), &instance, Verify::Existing, &mut Print).await.unwrap();
+    let mut command =
+        launch::build_command(&paths, &instance, &installed.resolved, &session(), &Settings::default(), &installed.java).unwrap();
+    command.stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::null()).kill_on_drop(true);
+    let mut child = command.spawn().unwrap();
+    let mut lines = BufReader::new(child.stdout.take().unwrap()).lines();
+    let mut log4j = crate::game::Log4jLines::default();
+    let booted = tokio::time::timeout(Duration::from_secs(240), async {
+        while let Ok(Some(raw)) = lines.next_line().await {
+            let Some(line) = log4j.push(&raw) else { continue };
+            if line.contains("Loading Minecraft") && line.contains("mods") || line.contains("Sound engine started") {
+                println!("  {line}");
+            }
+            if line.contains("Sound engine started") {
+                return true;
+            }
+        }
+        false
+    })
+    .await
+    .unwrap_or(false);
+    let _ = child.kill().await;
+    assert!(booted, "the imported pack didn't reach the title screen");
+}

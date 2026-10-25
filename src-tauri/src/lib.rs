@@ -9,6 +9,7 @@ mod launch;
 mod loaders;
 mod manifest;
 mod mclogs;
+mod modpacks;
 mod mods;
 mod menu;
 mod paths;
@@ -25,7 +26,7 @@ use tauri_plugin_opener::OpenerExt;
 use crate::error::{Result, msg};
 use crate::game::{GameLogs, Running};
 use crate::download::Verify;
-use crate::install::AppReporter;
+use crate::install::{AppReporter, ImportReporter};
 use crate::instances::Instance;
 use crate::loaders::{LoaderSource, LoaderVersion};
 use crate::manifest::VersionEntry;
@@ -213,6 +214,34 @@ async fn install_mod(state: State<'_, AppState>, id: String, source: mods::Sourc
     let settings = settings::load(&state.paths);
     let sites = mods::Sites { client: &state.http, curseforge_key: settings.curseforge_key() };
     mods::install(&sites, &state.paths, &instance, source, &project).await
+}
+
+#[tauri::command]
+async fn search_modpacks(state: State<'_, AppState>, source: mods::Source, query: String, offset: u32) -> Result<mods::SearchPage> {
+    let settings = settings::load(&state.paths);
+    let sites = mods::Sites { client: &state.http, curseforge_key: settings.curseforge_key() };
+    modpacks::search(&sites, source, &query, offset).await
+}
+
+/// Downloads a pack from Modrinth or CurseForge and makes an instance from it.
+#[tauri::command]
+async fn install_modpack(app: AppHandle, state: State<'_, AppState>, source: mods::Source, project: String) -> Result<modpacks::Imported> {
+    let settings = settings::load(&state.paths);
+    let sites = mods::Sites { client: &state.http, curseforge_key: settings.curseforge_key() };
+    let mut reporter = ImportReporter::new(app);
+    install::Reporter::stage(&mut reporter, "Downloading the modpack…");
+    let file = modpacks::download(&sites, &state.paths, source, &project).await?;
+    let result = modpacks::import(&sites, &state.paths, &file, &mut reporter).await;
+    let _ = std::fs::remove_file(file);
+    result
+}
+
+/// Makes an instance from a .mrpack or CurseForge zip on disk.
+#[tauri::command]
+async fn import_modpack_file(app: AppHandle, state: State<'_, AppState>, path: String) -> Result<modpacks::Imported> {
+    let settings = settings::load(&state.paths);
+    let sites = mods::Sites { client: &state.http, curseforge_key: settings.curseforge_key() };
+    modpacks::import(&sites, &state.paths, std::path::Path::new(&path), &mut ImportReporter::new(app)).await
 }
 
 #[tauri::command]
@@ -470,6 +499,9 @@ pub fn run() {
             check_curseforge_key,
             install_mod,
             check_mod_updates,
+            search_modpacks,
+            install_modpack,
+            import_modpack_file,
             update_mods,
             set_mod_enabled,
             remove_mod,

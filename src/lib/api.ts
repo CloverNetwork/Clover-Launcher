@@ -56,6 +56,9 @@ export type ModUpdate = {
   iconUrl: string | null;
   requires: string[];
 };
+export type BlockedFile = { name: string; url: string; folder: string };
+export type ImportedPack = { instance: Instance; blocked: BlockedFile[] };
+export type ImportProgress = { stage: string | null; done: number; total: number };
 export type UpdateCheck = { updates: ModUpdate[]; skipped: string | null };
 /** Where launchers apply for a third-party CurseForge API key. */
 export const CURSEFORGE_KEY_FORM = "https://forms.monday.com/forms/dce5ccb7afda9a1c21dab1a1aa1d84eb?r=use1";
@@ -114,6 +117,10 @@ export const api = {
   checkCurseforgeKey: (key: string) => invoke<void>("check_curseforge_key", { key }),
   /** Resolves to the titles of everything added, dependencies included. */
   installMod: (id: string, source: ModSource, project: string) => invoke<string[]>("install_mod", { id, source, project }),
+  searchModpacks: (source: ModSource, query: string, offset: number) =>
+    invoke<ModPage>("search_modpacks", { source, query, offset }),
+  installModpack: (source: ModSource, project: string) => invoke<ImportedPack>("install_modpack", { source, project }),
+  importModpackFile: (path: string) => invoke<ImportedPack>("import_modpack_file", { path }),
   checkModUpdates: (id: string) => invoke<UpdateCheck>("check_mod_updates", { id }),
   /** Resolves to the titles of everything updated or newly required. */
   updateMods: (id: string, updates: ModUpdate[]) => invoke<string[]>("update_mods", { id, updates }),
@@ -159,6 +166,7 @@ export const events = {
   gameLog: (fn: (l: LogLine) => void) => listen<LogLine>("game-log", (e) => fn(e.payload)),
   gameExit: (fn: (x: GameExit) => void) => listen<GameExit>("game-exit", (e) => fn(e.payload)),
   /** A new launch started this instance's log over. */
+  importProgress: (fn: (p: ImportProgress) => void) => listen<ImportProgress>("import-progress", (e) => fn(e.payload)),
   logPoppedIn: (fn: (instanceId: string) => void) => listen<string>("log-popped-in", (e) => fn(e.payload)),
   gameLogCleared: (fn: (instanceId: string) => void) => listen<string>("game-log-cleared", (e) => fn(e.payload)),
   menu: (fn: (id: string) => void) => listen<string>("menu-command", (e) => fn(e.payload)),
