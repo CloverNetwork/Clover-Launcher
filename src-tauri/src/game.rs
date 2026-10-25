@@ -1,14 +1,60 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::process::Stdio;
 use std::sync::Mutex;
 
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
 use tokio::process::Command;
 use tokio::sync::oneshot;
 
 use crate::error::{Result, msg};
+
+const MAX_LOG_LINES: usize = 2000;
+
+/// Recent output per instance, so a log window opened mid-game shows what came before.
+#[derive(Default)]
+pub struct GameLogs(Mutex<HashMap<String, VecDeque<String>>>);
+
+impl GameLogs {
+    pub fn lines(&self, instance_id: &str) -> Vec<String> {
+        self.0.lock().unwrap().get(instance_id).map(|l| l.iter().cloned().collect()).unwrap_or_default()
+    }
+}
+
+/// Records a line of game or installer output and sends it to every window.
+pub fn emit_log(app: &AppHandle, instance_id: &str, line: String) {
+    {
+        let logs = app.state::<GameLogs>();
+        let mut logs = logs.0.lock().unwrap();
+        let lines = logs.entry(instance_id.to_string()).or_default();
+        if lines.len() == MAX_LOG_LINES {
+            lines.pop_front();
+        }
+        lines.push_back(line.clone());
+    }
+    let _ = app.emit("game-log", LogLine { instance_id: instance_id.to_string(), line });
+}
+
+/// Starts a fresh log for a new launch, in every window.
+pub fn clear_log(app: &AppHandle, instance_id: &str) {
+    app.state::<GameLogs>().0.lock().unwrap().remove(instance_id);
+    let _ = app.emit("game-log-cleared", instance_id);
+}
+
+/// Opens an instance's log in its own window, or brings it forward if it's open.
+pub fn open_log_window(app: &AppHandle, instance_id: &str, name: &str) -> tauri::Result<()> {
+    let label = format!("log-{instance_id}");
+    if let Some(window) = app.get_webview_window(&label) {
+        return window.set_focus();
+    }
+    WebviewWindowBuilder::new(app, label, WebviewUrl::App(format!("log/{instance_id}").into()))
+        .title(format!("{name} — Game Log"))
+        .inner_size(760.0, 480.0)
+        .min_inner_size(420.0, 240.0)
+        .build()?;
+    Ok(())
+}
 
 /// Running games, keyed by instance ID. Sending on the channel stops the game.
 #[derive(Default)]
@@ -84,7 +130,7 @@ fn pipe(app: AppHandle, instance_id: String, stream: impl AsyncRead + Unpin + Se
         let mut log4j = Log4jLines::default();
         while let Ok(Some(line)) = lines.next_line().await {
             if let Some(line) = log4j.push(&line) {
-                let _ = app.emit("game-log", LogLine { instance_id: instance_id.clone(), line });
+                emit_log(&app, &instance_id, line);
             }
         }
     });

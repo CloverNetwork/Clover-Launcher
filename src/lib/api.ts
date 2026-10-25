@@ -62,6 +62,9 @@ export const api = {
   verifyInstance: (id: string) => invoke<[Instance, number]>("verify_instance", { id }),
   launchInstance: (id: string) => invoke<Instance>("launch_instance", { id }),
   stopInstance: (id: string) => invoke<void>("stop_instance", { id }),
+  /** The recent output of an instance's game and installers. */
+  gameLog: (id: string) => invoke<string[]>("game_log", { id }),
+  openLogWindow: (id: string) => invoke<void>("open_log_window", { id }),
   showInstanceFolder: (id: string) => invoke<void>("show_instance_folder", { id }),
   getSettings: () => invoke<Settings>("get_settings"),
   saveSettings: (settings: Settings) => invoke<void>("save_settings", { settings }),
@@ -93,6 +96,8 @@ export const events = {
   installProgress: (fn: (p: InstallProgress) => void) => listen<InstallProgress>("install-progress", (e) => fn(e.payload)),
   gameLog: (fn: (l: LogLine) => void) => listen<LogLine>("game-log", (e) => fn(e.payload)),
   gameExit: (fn: (x: GameExit) => void) => listen<GameExit>("game-exit", (e) => fn(e.payload)),
+  /** A new launch started this instance's log over. */
+  gameLogCleared: (fn: (instanceId: string) => void) => listen<string>("game-log-cleared", (e) => fn(e.payload)),
   menu: (fn: (id: string) => void) => listen<string>("menu-command", (e) => fn(e.payload)),
 };
 

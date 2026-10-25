@@ -29,13 +29,6 @@ struct Progress {
     total: usize,
 }
 
-#[derive(Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct LogLine<'a> {
-    instance_id: &'a str,
-    line: String,
-}
-
 /// Sends progress to the frontend as `install-progress` and installer output as `game-log`.
 pub struct AppReporter {
     pub app: AppHandle,
@@ -64,7 +57,7 @@ impl Reporter for AppReporter {
     }
 
     fn log(&mut self, line: String) {
-        let _ = self.app.emit("game-log", LogLine { instance_id: &self.instance_id, line });
+        crate::game::emit_log(&self.app, &self.instance_id, line);
     }
 }
 

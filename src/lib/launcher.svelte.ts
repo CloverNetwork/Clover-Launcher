@@ -161,6 +161,13 @@ class Launcher {
     }
   }
 
+  /** Moves the game log into its own window. */
+  async popOutLog(id = this.selectedId) {
+    if (!id) return;
+    await api.openLogWindow(id);
+    this.logVisible = false;
+  }
+
   async stop(id = this.selectedId) {
     if (id && this.activity[id] === "running") await api.stopInstance(id);
   }

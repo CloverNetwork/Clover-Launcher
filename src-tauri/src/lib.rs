@@ -21,7 +21,7 @@ use tauri::{AppHandle, Manager, State};
 use tauri_plugin_opener::OpenerExt;
 
 use crate::error::{Result, msg};
-use crate::game::Running;
+use crate::game::{GameLogs, Running};
 use crate::download::Verify;
 use crate::install::AppReporter;
 use crate::instances::Instance;
@@ -158,6 +158,7 @@ async fn launch_instance(app: AppHandle, state: State<'_, AppState>, running: St
         return Err(msg("This instance is already running."));
     }
     let mut instance = instances::get(&state.paths, &id)?;
+    game::clear_log(&app, &id);
     // Sign in first so a missing account fails before a long download.
     let session = auth::session(&state.http, &state.paths, &state.sessions).await?;
     // Always re-verify files; already-valid ones are skipped.
@@ -172,6 +173,17 @@ async fn launch_instance(app: AppHandle, state: State<'_, AppState>, running: St
     instance.last_played = Some(instances::now());
     instances::save(&state.paths, &instance)?;
     Ok(instance)
+}
+
+#[tauri::command]
+fn game_log(logs: State<'_, GameLogs>, id: String) -> Vec<String> {
+    logs.lines(&id)
+}
+
+#[tauri::command]
+fn open_log_window(app: AppHandle, state: State<'_, AppState>, id: String) -> Result<()> {
+    let instance = instances::get(&state.paths, &id)?;
+    Ok(game::open_log_window(&app, &instance.id, &instance.name)?)
 }
 
 #[tauri::command]
@@ -329,6 +341,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(Running::default())
+        .manage(GameLogs::default())
         .setup(|app| {
             let http = Client::builder()
                 .user_agent(concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION")))
@@ -352,6 +365,8 @@ pub fn run() {
             verify_instance,
             launch_instance,
             stop_instance,
+            game_log,
+            open_log_window,
             show_instance_folder,
             get_settings,
             save_settings,
