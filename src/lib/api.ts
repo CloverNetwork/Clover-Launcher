@@ -42,6 +42,21 @@ export type ModHit = {
   pageUrl: string;
 };
 export type ModPage = { hits: ModHit[]; total: number };
+/** A newer file for an installed mod; passed back as is to install it. */
+export type ModUpdate = {
+  file: string;
+  title: string;
+  source: ModSource;
+  projectId: string;
+  currentVersion: string | null;
+  newVersion: string;
+  newFile: string;
+  url: string;
+  sha1: string | null;
+  iconUrl: string | null;
+  requires: string[];
+};
+export type UpdateCheck = { updates: ModUpdate[]; skipped: string | null };
 /** Where launchers apply for a third-party CurseForge API key. */
 export const CURSEFORGE_KEY_FORM = "https://forms.monday.com/forms/dce5ccb7afda9a1c21dab1a1aa1d84eb?r=use1";
 export type InstalledMod = {
@@ -99,6 +114,9 @@ export const api = {
   checkCurseforgeKey: (key: string) => invoke<void>("check_curseforge_key", { key }),
   /** Resolves to the titles of everything added, dependencies included. */
   installMod: (id: string, source: ModSource, project: string) => invoke<string[]>("install_mod", { id, source, project }),
+  checkModUpdates: (id: string) => invoke<UpdateCheck>("check_mod_updates", { id }),
+  /** Resolves to the titles of everything updated or newly required. */
+  updateMods: (id: string, updates: ModUpdate[]) => invoke<string[]>("update_mods", { id, updates }),
   setModEnabled: (id: string, file: string, enabled: boolean) => invoke<void>("set_mod_enabled", { id, file, enabled }),
   removeMod: (id: string, file: string) => invoke<void>("remove_mod", { id, file }),
   showModsFolder: (id: string) => invoke<void>("show_mods_folder", { id }),

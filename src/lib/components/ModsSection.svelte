@@ -1,7 +1,7 @@
-<!-- The instance page's list of mods: turn them on and off, remove them, add more. -->
+<!-- The instance page's list of mods: turn them on and off, update, remove, add more. -->
 <script lang="ts">
   import { Menu } from "@tauri-apps/api/menu";
-  import { api, errorText, type Instance, type InstalledMod } from "$lib/api";
+  import { api, errorText, type Instance, type InstalledMod, type ModUpdate } from "$lib/api";
   import { launcher } from "$lib/launcher.svelte";
   import BlockIcon from "./BlockIcon.svelte";
   import Icon from "./Icon.svelte";
@@ -10,16 +10,61 @@
 
   let mods = $state<InstalledMod[]>([]);
   let error = $state<string | null>(null);
+  let updates = $state<ModUpdate[]>([]);
+  let checking = $state(false);
+  let updating = $state<Set<string>>(new Set());
+  let status = $state<string | null>(null);
   const running = $derived(launcher.activity[instance.id] === "running");
   const enabledCount = $derived(mods.filter((m) => m.enabled).length);
+  const updateFor = (mod: InstalledMod) => updates.find((u) => u.file === mod.file);
 
+  // Load the list, then ask Modrinth and CurseForge whether anything is newer.
   $effect(() => {
     const [id] = [instance.id, launcher.modsRevision];
+    let current = true;
+    updates = [];
     api
       .listMods(id)
-      .then((list) => (mods = list))
+      .then((list) => {
+        if (!current) return;
+        mods = list;
+        if (list.length) checkUpdates(id, () => current);
+      })
       .catch((e) => (error = errorText(e)));
+    return () => (current = false);
   });
+
+  async function checkUpdates(id: string, stillCurrent = () => true) {
+    checking = true;
+    try {
+      const check = await api.checkModUpdates(id);
+      if (!stillCurrent()) return;
+      updates = check.updates;
+      status = check.skipped;
+    } catch (e) {
+      // Being offline shouldn't make the mod list look broken.
+      if (stillCurrent()) status = `Couldn't check for updates: ${errorText(e)}`;
+    } finally {
+      checking = false;
+    }
+  }
+
+  async function applyUpdates(list: ModUpdate[]) {
+    error = status = null;
+    updating = new Set(list.map((u) => u.file));
+    try {
+      const changed = await api.updateMods(instance.id, list);
+      const extra = changed.filter((title) => !list.some((u) => u.title === title));
+      status =
+        `Updated ${list.length === 1 ? list[0].title : `${list.length} mods`}.` +
+        (extra.length ? ` Also added ${extra.join(", ")}, which the new versions need.` : "");
+      launcher.modsRevision++;
+    } catch (e) {
+      error = errorText(e);
+    } finally {
+      updating = new Set();
+    }
+  }
 
   async function toggle(mod: InstalledMod) {
     error = null;
@@ -43,8 +88,12 @@
 
   async function showMenu(e: MouseEvent, mod: InstalledMod) {
     e.preventDefault();
+    const update = updateFor(mod);
     const menu = await Menu.new({
       items: [
+        ...(update
+          ? [{ id: "update", text: `Update to ${update.newVersion}`, enabled: !running, action: () => applyUpdates([update]) }]
+          : []),
         { id: "toggle", text: mod.enabled ? "Turn Off" : "Turn On", action: () => toggle(mod) },
         { item: "Separator" },
         { id: "remove", text: "Remove", action: () => remove(mod) },
@@ -64,6 +113,15 @@
       <span class="secondary count">{enabledCount} of {mods.length} on</span>
     {/if}
     <div class="spacer"></div>
+    {#if updates.length}
+      <button class="button" disabled={running || updating.size > 0} onclick={() => applyUpdates(updates)}>
+        {updating.size > 1 ? "Updating…" : `Update All (${updates.length})`}
+      </button>
+    {:else if mods.length}
+      <button class="icon-button" aria-label="Check for Updates" title="Check for Updates" disabled={checking} onclick={() => checkUpdates(instance.id)}>
+        <Icon name="refresh" size={14} />
+      </button>
+    {/if}
     <button class="icon-button" aria-label="Show Mods Folder" title="Show Mods Folder" onclick={() => api.showModsFolder(instance.id)}>
       <Icon name="folder" />
     </button>
@@ -71,7 +129,10 @@
   </header>
 
   {#if running && mods.length}
-    <p class="note secondary">Changes take effect the next time you play.</p>
+    <p class="note secondary">Changes take effect the next time you play. Quit the game to update mods.</p>
+  {/if}
+  {#if checking || status}
+    <p class="note secondary" role="status">{checking ? "Checking for updates…" : status}</p>
   {/if}
   {#if error}
     <p class="error" role="alert">{error}</p>
@@ -80,6 +141,7 @@
   {#if mods.length}
     <ul>
       {#each mods as mod (mod.file)}
+        {@const update = updateFor(mod)}
         <li class:off={!mod.enabled} oncontextmenu={(e) => showMenu(e, mod)}>
           {#if mod.iconUrl}
             <img src={mod.iconUrl} alt="" width="32" height="32" loading="lazy" />
@@ -89,9 +151,24 @@
           <div class="text">
             <span class="title">{mod.title}</span>
             <span class="secondary detail">
-              {mod.version ?? mod.file} · {sourceName(mod)}{mod.dependency ? " · Required by another mod" : ""}
+              {#if update}
+                <span class="new">{mod.version ?? update.currentVersion ?? mod.file} → {update.newVersion}</span>
+              {:else}
+                {mod.version ?? mod.file}
+              {/if}
+              · {sourceName(mod)}{mod.dependency ? " · Required by another mod" : ""}
             </span>
           </div>
+          {#if update}
+            <button
+              class="button update"
+              disabled={running || updating.has(mod.file)}
+              title="Update to {update.newVersion}"
+              onclick={() => applyUpdates([update])}
+            >
+              {updating.has(mod.file) ? "Updating…" : "Update"}
+            </button>
+          {/if}
           <label class="switch" title={mod.enabled ? "Turn Off" : "Turn On"}>
             <input type="checkbox" role="switch" checked={mod.enabled} onchange={() => toggle(mod)} aria-label="{mod.title} on" />
             <span aria-hidden="true"></span>
@@ -234,6 +311,17 @@
 
   .switch input:focus-visible + span {
     box-shadow: var(--focus-ring);
+  }
+
+  .new {
+    color: var(--accent);
+  }
+
+  .update {
+    flex: none;
+    min-height: 22px;
+    padding: 2px 10px;
+    font-size: 12px;
   }
 
   .remove {

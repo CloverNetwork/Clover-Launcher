@@ -5,12 +5,13 @@
 //! from. Jars someone drops into the folder by hand still show up, just without a source.
 //! Disabling a mod renames `name.jar` to `name.jar.disabled`, as other launchers do.
 
-use std::collections::HashSet;
-use std::path::PathBuf;
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 
 use reqwest::{Client, RequestBuilder};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Value, json as body};
+use sha1::{Digest, Sha1};
 
 use crate::download::{self, Task, Verify};
 use crate::error::{Result, msg};
@@ -358,6 +359,18 @@ pub fn installed(paths: &Paths, instance: &Instance) -> Result<Vec<InstalledMod>
 /// Installs a project's best matching file and everything it requires.
 /// Returns the titles of what was added, the picked mod first.
 pub async fn install(sites: &Sites<'_>, paths: &Paths, instance: &Instance, source: Source, project: &str) -> Result<Vec<String>> {
+    install_queue(sites, paths, instance, source, vec![(project.to_string(), 0)]).await
+}
+
+/// Installs projects and what they require. Depth 0 is a picked mod (updated if present);
+/// deeper entries are dependencies, left alone when already installed.
+async fn install_queue(
+    sites: &Sites<'_>,
+    paths: &Paths,
+    instance: &Instance,
+    source: Source,
+    mut queue: Vec<(String, usize)>,
+) -> Result<Vec<String>> {
     let target = Target::for_instance(instance)?;
     let dir = mods_dir(paths, instance);
     std::fs::create_dir_all(&dir)?;
@@ -365,7 +378,6 @@ pub async fn install(sites: &Sites<'_>, paths: &Paths, instance: &Instance, sour
     let present: HashSet<String> = installed(paths, instance)?.into_iter().map(|m| m.file).collect();
     let mut added = Vec::new();
     let mut seen = HashSet::new();
-    let mut queue = vec![(project.to_string(), 0usize)];
 
     while let Some((project, depth)) = queue.pop() {
         if !seen.insert(project.clone()) || depth > MAX_DEPENDENCY_DEPTH {
@@ -397,6 +409,186 @@ pub async fn install(sites: &Sites<'_>, paths: &Paths, instance: &Instance, sour
     }
 
     save_records(paths, instance, &records)?;
+    Ok(added)
+}
+
+/// A newer file for an installed mod. `update` installs exactly this file, so what the
+/// person saw is what they get.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModUpdate {
+    /// The installed file it replaces.
+    pub file: String,
+    pub title: String,
+    pub source: Source,
+    pub project_id: String,
+    pub current_version: Option<String>,
+    pub new_version: String,
+    pub new_file: String,
+    pub url: String,
+    pub sha1: Option<String>,
+    pub icon_url: Option<String>,
+    /// Projects the new version requires.
+    #[serde(default)]
+    pub requires: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateCheck {
+    pub updates: Vec<ModUpdate>,
+    /// Why some mods weren't checked, such as CurseForge without a key.
+    pub skipped: Option<String>,
+}
+
+fn file_on_disk(dir: &Path, file: &str) -> PathBuf {
+    let enabled = dir.join(file);
+    if enabled.exists() { enabled } else { dir.join(format!("{file}.disabled")) }
+}
+
+/// Looks for newer versions of every mod. Modrinth is asked about every jar by its hash,
+/// so it also finds updates for mods added by hand; CurseForge mods are checked one by one.
+pub async fn check_updates(sites: &Sites<'_>, paths: &Paths, instance: &Instance) -> Result<UpdateCheck> {
+    let target = Target::for_instance(instance)?;
+    let dir = mods_dir(paths, instance);
+    let mods = installed(paths, instance)?;
+    let mut updates = Vec::new();
+    let mut skipped = None;
+
+    let by_hash: HashMap<String, &InstalledMod> = mods
+        .iter()
+        .filter(|m| m.source != Some(Source::Curseforge))
+        .filter_map(|m| Some((hex::encode(Sha1::digest(std::fs::read(file_on_disk(&dir, &m.file)).ok()?)), m)))
+        .collect();
+    if !by_hash.is_empty() {
+        let hashes: Vec<&String> = by_hash.keys().collect();
+        let current = json(sites.client.post(format!("{MODRINTH}/version_files")).json(&body!({ "hashes": hashes, "algorithm": "sha1" }))).await?;
+        let latest = json(sites.client.post(format!("{MODRINTH}/version_files/update")).json(&body!({
+            "hashes": hashes,
+            "algorithm": "sha1",
+            "loaders": target.modrinth_loaders,
+            "game_versions": [target.game],
+        })))
+        .await?;
+        let mut found = Vec::new();
+        for (hash, new) in latest.as_object().into_iter().flatten() {
+            let (Some(installed), now) = (by_hash.get(hash), &current[hash]) else { continue };
+            if now["id"] == new["id"] {
+                continue;
+            }
+            // Someone on a stable release isn't offered a beta.
+            if now["version_type"] == "release" && new["version_type"] != "release" {
+                continue;
+            }
+            let files = new["files"].as_array().cloned().unwrap_or_default();
+            let Some(file) = files.iter().find(|f| f["primary"] == true).or(files.first()) else { continue };
+            found.push(ModUpdate {
+                file: installed.file.clone(),
+                title: installed.title.clone(),
+                source: Source::Modrinth,
+                project_id: text(new, "project_id"),
+                current_version: now["version_number"].as_str().map(String::from).or(installed.version.clone()),
+                new_version: text(new, "version_number"),
+                new_file: text(file, "filename"),
+                url: text(file, "url"),
+                sha1: file["hashes"]["sha1"].as_str().map(String::from),
+                icon_url: installed.icon_url.clone(),
+                requires: new["dependencies"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter(|d| d["dependency_type"] == "required")
+                    .filter_map(|d| d["project_id"].as_str().map(String::from))
+                    .collect(),
+            });
+        }
+        // Mods added by hand only have a file name; use the project's real name and icon.
+        let ids: Vec<&String> = found.iter().map(|u| &u.project_id).collect();
+        if !ids.is_empty() {
+            let projects = json(sites.client.get(format!("{MODRINTH}/projects")).query(&[("ids", serde_json::to_string(&ids)?)])).await?;
+            for project in projects.as_array().into_iter().flatten() {
+                for update in found.iter_mut().filter(|u| u.project_id == text(project, "id")) {
+                    update.title = text(project, "title");
+                    update.icon_url = project["icon_url"].as_str().filter(|u| !u.is_empty()).map(String::from);
+                }
+            }
+        }
+        updates.extend(found);
+    }
+
+    let from_curseforge: Vec<&InstalledMod> = mods.iter().filter(|m| m.source == Some(Source::Curseforge)).collect();
+    if !from_curseforge.is_empty() {
+        if sites.curseforge_key.is_none() {
+            skipped = Some("CurseForge mods weren't checked because there's no CurseForge API key.".into());
+        } else {
+            for installed in from_curseforge {
+                let Some(project) = &installed.project_id else { continue };
+                // A mod whose newest file can't be downloaded here is skipped, not an error.
+                let Ok(newest) = resolve_curseforge(sites, &target, project).await else { continue };
+                if newest.record.file == installed.file {
+                    continue;
+                }
+                updates.push(ModUpdate {
+                    file: installed.file.clone(),
+                    title: installed.title.clone(),
+                    source: Source::Curseforge,
+                    project_id: project.clone(),
+                    current_version: installed.version.clone(),
+                    new_version: newest.record.version.unwrap_or_default(),
+                    new_file: newest.record.file,
+                    url: newest.url,
+                    sha1: newest.sha1,
+                    icon_url: installed.icon_url.clone(),
+                    requires: newest.requires,
+                });
+            }
+        }
+    }
+
+    updates.sort_by_key(|u| u.title.to_lowercase());
+    Ok(UpdateCheck { updates, skipped })
+}
+
+/// Swaps an installed mod for the newer file from `check_updates`, keeping it on or off
+/// as it was, then installs anything the new version newly requires.
+pub async fn update(sites: &Sites<'_>, paths: &Paths, instance: &Instance, update: &ModUpdate) -> Result<Vec<String>> {
+    check_file_name(&update.file)?;
+    check_file_name(&update.new_file)?;
+    let trusted = ["https://cdn.modrinth.com/", "https://edge.forgecdn.net/", "https://mediafilez.forgecdn.net/"];
+    if !trusted.iter().any(|host| update.url.starts_with(host)) {
+        return Err(msg("That update doesn't come from Modrinth or CurseForge."));
+    }
+    let dir = mods_dir(paths, instance);
+    let was_enabled = !dir.join(format!("{}.disabled", update.file)).exists();
+    let new_path = dir.join(&update.new_file);
+    download::fetch(sites.client, Task { url: update.url.clone(), path: new_path.clone(), sha1: update.sha1.clone() }, Verify::Full)
+        .await?;
+    if update.new_file != update.file {
+        let _ = std::fs::remove_file(dir.join(&update.file));
+        let _ = std::fs::remove_file(dir.join(format!("{}.disabled", update.file)));
+    }
+    if !was_enabled {
+        std::fs::rename(&new_path, dir.join(format!("{}.disabled", update.new_file)))?;
+    }
+
+    let mut records = load_records(paths, instance);
+    let dependency = records.iter().find(|r| r.file == update.file).is_some_and(|r| r.dependency);
+    records.retain(|r| r.file != update.file && !(r.source == Some(update.source) && r.project_id.as_deref() == Some(update.project_id.as_str())));
+    records.push(InstalledMod {
+        file: update.new_file.clone(),
+        title: update.title.clone(),
+        source: Some(update.source),
+        project_id: Some(update.project_id.clone()),
+        version: Some(update.new_version.clone()),
+        icon_url: update.icon_url.clone(),
+        dependency,
+        enabled: was_enabled,
+    });
+    save_records(paths, instance, &records)?;
+
+    let mut added = vec![update.title.clone()];
+    let needed = update.requires.iter().map(|p| (p.clone(), 1)).collect();
+    added.extend(install_queue(sites, paths, instance, update.source, needed).await?);
     Ok(added)
 }
 
@@ -472,6 +664,45 @@ mod tests {
     async fn rejects_an_unapproved_curseforge_key() {
         let error = check_curseforge_key(&Client::new(), "$2a$10$not-a-real-key").await.unwrap_err().to_string();
         assert!(error.contains("rejected"), "{error}");
+    }
+
+    /// Puts an old Sodium in the mods folder by hand, finds its update by hash, applies it,
+    /// and checks nothing is left to update. Run with `cargo test updates_an_old -- --ignored`.
+    #[tokio::test]
+    #[ignore]
+    async fn updates_an_old_hand_added_mod() {
+        let dir = std::env::temp_dir().join(format!("clover-updates-{}", std::process::id()));
+        let paths = Paths::at(dir.clone());
+        let instance = instance("fabric");
+        let client = Client::builder().user_agent("CloverNetwork/Clover-Launcher/test").build().unwrap();
+        let sites = Sites { client: &client, curseforge_key: None };
+
+        let versions = json(client.get(format!("{MODRINTH}/project/sodium/version")).query(&[
+            ("loaders", r#"["fabric"]"#),
+            ("game_versions", r#"["1.21.4"]"#),
+        ]))
+        .await
+        .unwrap();
+        let oldest = versions.as_array().unwrap().last().unwrap();
+        let old_file = text(&oldest["files"][0], "filename");
+        let mods = mods_dir(&paths, &instance);
+        std::fs::create_dir_all(&mods).unwrap();
+        let bytes = client.get(text(&oldest["files"][0], "url")).send().await.unwrap().bytes().await.unwrap();
+        std::fs::write(mods.join(&old_file), bytes).unwrap();
+        set_enabled(&paths, &instance, &old_file, false).unwrap();
+
+        let check = check_updates(&sites, &paths, &instance).await.unwrap();
+        let sodium = check.updates.iter().find(|u| u.title == "Sodium").expect("Sodium update found by hash");
+        println!("{} → {}", sodium.current_version.as_deref().unwrap_or("?"), sodium.new_version);
+        update(&sites, &paths, &instance, sodium).await.unwrap();
+
+        let after = installed(&paths, &instance).unwrap();
+        assert_eq!(after.len(), 1);
+        assert_eq!(after[0].file, sodium.new_file);
+        assert_eq!(after[0].source, Some(Source::Modrinth));
+        assert!(!after[0].enabled, "a disabled mod stays disabled");
+        assert!(check_updates(&sites, &paths, &instance).await.unwrap().updates.is_empty());
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     /// Installs Iris from Modrinth, which requires Sodium, then disables and removes it.

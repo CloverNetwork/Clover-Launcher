@@ -216,6 +216,30 @@ async fn install_mod(state: State<'_, AppState>, id: String, source: mods::Sourc
 }
 
 #[tauri::command]
+async fn check_mod_updates(state: State<'_, AppState>, id: String) -> Result<mods::UpdateCheck> {
+    let instance = instances::get(&state.paths, &id)?;
+    let settings = settings::load(&state.paths);
+    let sites = mods::Sites { client: &state.http, curseforge_key: settings.curseforge_key() };
+    mods::check_updates(&sites, &state.paths, &instance).await
+}
+
+/// Applies updates one after another. Returns the titles of everything updated or added.
+#[tauri::command]
+async fn update_mods(state: State<'_, AppState>, running: State<'_, Running>, id: String, updates: Vec<mods::ModUpdate>) -> Result<Vec<String>> {
+    if running.is_running(&id) {
+        return Err(msg("Quit the game before updating its mods."));
+    }
+    let instance = instances::get(&state.paths, &id)?;
+    let settings = settings::load(&state.paths);
+    let sites = mods::Sites { client: &state.http, curseforge_key: settings.curseforge_key() };
+    let mut changed = Vec::new();
+    for update in &updates {
+        changed.extend(mods::update(&sites, &state.paths, &instance, update).await?);
+    }
+    Ok(changed)
+}
+
+#[tauri::command]
 fn set_mod_enabled(state: State<'_, AppState>, id: String, file: String, enabled: bool) -> Result<()> {
     mods::set_enabled(&state.paths, &instances::get(&state.paths, &id)?, &file, enabled)
 }
@@ -445,6 +469,8 @@ pub fn run() {
             list_mods,
             check_curseforge_key,
             install_mod,
+            check_mod_updates,
+            update_mods,
             set_mod_enabled,
             remove_mod,
             show_mods_folder,
