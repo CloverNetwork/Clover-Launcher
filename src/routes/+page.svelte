@@ -29,6 +29,7 @@
     view_grid: () => launcher.setLayout("grid"),
     toggle_log: () => (launcher.logVisible = !launcher.logVisible),
     verify_files: () => launcher.verify(),
+    create_shortcut: () => launcher.createShortcut(),
     add_account: () => (launcher.accountOpen = true),
     skins: () => launcher.account && (launcher.skinsOpen = true),
     sign_out: () => launcher.signOut(),

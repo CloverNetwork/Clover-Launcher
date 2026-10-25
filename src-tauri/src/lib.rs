@@ -3,6 +3,7 @@
 mod chrome;
 mod events;
 mod menu;
+mod shortcuts;
 
 use clover_core::download::Verify;
 use clover_core::error::{Result, msg};
@@ -22,6 +23,32 @@ use crate::events::{AppReporter, ImportReporter};
 /// Tauri's own errors, worded for the person using the app.
 fn ui<T>(result: tauri::Result<T>) -> Result<T> {
     result.map_err(|e| msg(e.to_string()))
+}
+
+/// An instance named with `--launch` when Clover started, waiting for the window to ask.
+struct PendingLaunch(std::sync::Mutex<Option<String>>);
+
+#[tauri::command]
+fn take_pending_launch(pending: State<'_, PendingLaunch>) -> Option<String> {
+    pending.0.lock().unwrap().take()
+}
+
+/// Adds an instance to the OS's launcher (Applications, the app menu, or the desktop).
+#[tauri::command]
+fn create_shortcut(app: AppHandle, state: State<'_, AppState>, id: String) -> Result<String> {
+    let instance = instances::get(&state.paths, &id)?;
+    let home = ui(app.path().home_dir())?;
+    let desktop = app.path().desktop_dir().unwrap_or_else(|_| home.join("Desktop"));
+    let place = shortcuts::create(&instance, &home, &desktop)?;
+    // Show it the way people read paths: ~/Applications/… rather than /Users/name/….
+    let shown = place.strip_prefix(&home).map(|p| format!("~/{}", p.display())).unwrap_or_else(|_| place.display().to_string());
+    Ok(shown)
+}
+
+/// The command that starts an instance, for Hyprland keybinds and scripts.
+#[tauri::command]
+fn launch_command(state: State<'_, AppState>, id: String) -> Result<String> {
+    shortcuts::launch_command(&instances::get(&state.paths, &id)?)
 }
 
 struct AppState {
@@ -466,6 +493,18 @@ fn open_settings(app: AppHandle) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // First, so a second start hands its `--launch` to the open app and quits.
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            if let Some(id) = shortcuts::launch_arg(argv) {
+                let _ = app.emit("launch-request", id);
+            }
+            if let Some(main) = app.get_webview_window("main") {
+                let _ = main.unminimize();
+                let _ = main.show();
+                let _ = main.set_focus();
+            }
+        }))
+        .manage(PendingLaunch(std::sync::Mutex::new(shortcuts::launch_arg(std::env::args()))))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(Running::default())
@@ -527,6 +566,9 @@ pub fn run() {
             open_settings,
             window_chrome,
             quit,
+            take_pending_launch,
+            create_shortcut,
+            launch_command,
             get_wardrobe,
             list_skin_library,
             add_skin_to_library,

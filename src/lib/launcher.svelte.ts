@@ -1,8 +1,15 @@
 import { Menu } from "@tauri-apps/api/menu";
-import { ask } from "@tauri-apps/plugin-dialog";
+import { ask, message } from "@tauri-apps/plugin-dialog";
 import { api, errorText, events, type Accounts, type Instance, type LoaderSource, type Profile } from "./api";
 
 const MAX_LOG_LINES = 2000;
+
+/** Where an instance shortcut goes, in each OS's words. */
+export const SHORTCUT_LABEL = navigator.userAgent.includes("Mac")
+  ? "Add to Applications"
+  : navigator.userAgent.includes("Windows")
+    ? "Create Desktop Shortcut"
+    : "Add to App Launcher";
 const LAYOUT_KEY = "clover.layout";
 
 export type Layout = "sidebar" | "grid";
@@ -59,6 +66,7 @@ class Launcher {
         lines.push(line);
         if (lines.length > MAX_LOG_LINES) lines.splice(0, lines.length - MAX_LOG_LINES);
       }),
+      events.launchRequest((id) => this.launchFromOutside(id)),
       events.logPoppedIn((instanceId) => {
         this.open(instanceId);
         this.logVisible = true;
@@ -73,6 +81,8 @@ class Launcher {
     ]);
     this.setAccounts(await api.getAccounts());
     await Promise.all([this.reload(), this.reloadLoaders()]);
+    const pending = await api.takePendingLaunch();
+    if (pending) this.launchFromOutside(pending);
   }
 
   async reload() {
@@ -105,6 +115,41 @@ class Launcher {
     }
   }
 
+  /** Plays an instance named by a shortcut, keybind or `--launch`. */
+  async launchFromOutside(id: string) {
+    if (!this.instances.some((i) => i.id === id)) await this.reload();
+    if (!this.instances.some((i) => i.id === id)) {
+      await message("The shortcut points to an instance that no longer exists. You can delete the shortcut.", {
+        title: "Instance Not Found",
+        kind: "warning",
+      });
+      return;
+    }
+    this.open(id);
+    await this.play(id);
+  }
+
+  async createShortcut(id = this.selectedId) {
+    if (!id) return;
+    try {
+      const place = await api.createShortcut(id);
+      this.notice = { instanceId: id, message: `Added a shortcut: ${place}` };
+    } catch (e) {
+      this.error = { instanceId: id, message: errorText(e) };
+    }
+  }
+
+  /** Copies the command that starts an instance, for Hyprland keybinds and scripts. */
+  async copyLaunchCommand(id = this.selectedId) {
+    if (!id) return;
+    try {
+      await navigator.clipboard.writeText(await api.launchCommand(id));
+      this.notice = { instanceId: id, message: "Copied the launch command." };
+    } catch (e) {
+      this.error = { instanceId: id, message: errorText(e) };
+    }
+  }
+
   /** Opens an instance: in the grid layout that shows its page, in the sidebar it selects it. */
   open(id: string) {
     this.selectedId = id;
@@ -124,6 +169,9 @@ class Launcher {
         { item: "Separator" },
         { id: "show", text: "Show in Finder", action: () => this.showFolder(id) },
         { id: "verify", text: "Verify Game Files", enabled: !this.activity[id], action: () => this.verify(id) },
+        { item: "Separator" },
+        { id: "shortcut", text: SHORTCUT_LABEL, action: () => this.createShortcut(id) },
+        { id: "command", text: "Copy Launch Command", action: () => this.copyLaunchCommand(id) },
         { item: "Separator" },
         { id: "delete", text: "Delete Instance…", enabled: !running, action: () => this.remove(id) },
       ],

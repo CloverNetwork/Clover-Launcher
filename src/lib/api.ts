@@ -150,6 +150,11 @@ export const api = {
   signInOffline: (name: string) => invoke<Accounts>("sign_in_offline", { name }),
   openSettings: () => invoke<void>("open_settings"),
   windowChrome: () => invoke<WindowChrome>("window_chrome"),
+  /** An instance named with --launch when Clover started, once. */
+  takePendingLaunch: () => invoke<string | null>("take_pending_launch"),
+  /** Adds the instance to the OS's launcher; resolves to where it went. */
+  createShortcut: (id: string) => invoke<string>("create_shortcut", { id }),
+  launchCommand: (id: string) => invoke<string>("launch_command", { id }),
   quit: () => invoke<void>("quit"),
   /** `null` for offline accounts, which have no skins on Mojang's servers. */
   getWardrobe: () => invoke<Wardrobe | null>("get_wardrobe"),
@@ -173,6 +178,8 @@ export const events = {
   gameExit: (fn: (x: GameExit) => void) => listen<GameExit>("game-exit", (e) => fn(e.payload)),
   /** A new launch started this instance's log over. */
   importProgress: (fn: (p: ImportProgress) => void) => listen<ImportProgress>("import-progress", (e) => fn(e.payload)),
+  /** A shortcut or keybind asked the open app to start an instance. */
+  launchRequest: (fn: (id: string) => void) => listen<string>("launch-request", (e) => fn(e.payload)),
   windowChrome: (fn: (c: WindowChrome) => void) => listen<WindowChrome>("window-chrome", (e) => fn(e.payload)),
   logPoppedIn: (fn: (instanceId: string) => void) => listen<string>("log-popped-in", (e) => fn(e.payload)),
   gameLogCleared: (fn: (instanceId: string) => void) => listen<string>("game-log-cleared", (e) => fn(e.payload)),

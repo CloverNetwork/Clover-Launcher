@@ -53,7 +53,8 @@ pub fn open_log_window(app: &AppHandle, instance_id: &str, name: &str) -> tauri:
 
 /// Moves a log window's contents back under the instance page in the main window.
 pub fn pop_in_log_window(app: &AppHandle, instance_id: &str) -> tauri::Result<()> {
-    app.emit_to("main", "log-popped-in", instance_id)?;
+    // Only the main window listens for this.
+    app.emit("log-popped-in", instance_id)?;
     if let Some(main) = app.get_webview_window("main") {
         main.set_focus()?;
     }

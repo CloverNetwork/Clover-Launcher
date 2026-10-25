@@ -33,6 +33,15 @@ Java is picked per version. If the right one isn't installed, Clover downloads M
 runtime into its data folder. On Apple silicon, old versions that need Java 8 run under Rosetta.
 You can set one Java for everything in Settings.
 
+Right-click an instance to add it to your Applications folder, app launcher or desktop, or to
+copy a command that starts it, for example a Hyprland keybind:
+
+```
+bind = SUPER, M, exec, clover-launcher --launch <instance-id>
+```
+
+If Clover is already open, the running app starts the instance.
+
 CurseForge mods need an API key approved for third-party apps
 ([apply here](https://forms.monday.com/forms/dce5ccb7afda9a1c21dab1a1aa1d84eb?r=use1)). Paste it in
 Settings, or build it in with `CURSEFORGE_API_KEY='...' pnpm tauri build`. Use single quotes,

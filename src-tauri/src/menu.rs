@@ -8,6 +8,15 @@ use clover_core::auth::Accounts;
 /// Account item IDs are `account:<uuid>`; the window switches to that account.
 pub const ACCOUNT_PREFIX: &str = "account:";
 
+/// Where an instance shortcut goes, in each OS's words.
+const SHORTCUT_LABEL: &str = if cfg!(target_os = "macos") {
+    "Add to Applications"
+} else if cfg!(windows) {
+    "Create Desktop Shortcut"
+} else {
+    "Add to App Launcher"
+};
+
 /// Rebuilt whenever accounts change, so Game › Account always lists them.
 pub fn build(app: &AppHandle, accounts: &Accounts) -> tauri::Result<Menu<Wry>> {
     let item = |id: &str, label: &str, accel: Option<&str>| MenuItem::with_id(app, id, label, true, accel);
@@ -30,6 +39,7 @@ pub fn build(app: &AppHandle, accounts: &Accounts) -> tauri::Result<Menu<Wry>> {
         .item(&item("import_modpack", "Import Modpack…", Some("CmdOrCtrl+Shift+N"))?)
         .separator()
         .item(&item("show_folder", "Show in Finder", Some("CmdOrCtrl+Shift+R"))?)
+        .item(&item("create_shortcut", SHORTCUT_LABEL, None)?)
         .separator()
         .item(&item("delete_instance", "Delete Instance…", Some("CmdOrCtrl+Backspace"))?)
         .separator()
@@ -84,7 +94,9 @@ pub fn handle(app: &AppHandle, id: &str) {
     match id {
         "settings" => open_settings(app),
         other => {
-            let _ = app.emit_to("main", "menu-command", other);
+            // A plain emit: the window's `listen` doesn't receive `emit_to` events. Only the
+            // main window listens for menu commands.
+            let _ = app.emit("menu-command", other);
         }
     }
 }
