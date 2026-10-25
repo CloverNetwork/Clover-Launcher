@@ -63,7 +63,7 @@ pub fn open_settings(app: &AppHandle) {
     }
     let _ = WebviewWindowBuilder::new(app, "settings", WebviewUrl::App("settings".into()))
         .title("Settings")
-        .inner_size(480.0, 260.0)
+        .inner_size(540.0, 560.0)
         .resizable(false)
         .minimizable(false)
         .maximizable(false)

@@ -15,6 +15,7 @@
 
   const status = $derived.by(() => {
     if (activity === "running") return "Playing";
+    if (activity === "launching" && progress?.stage) return progress.stage;
     if (activity === "launching" && progress && progress.done < progress.total)
       return `Downloading files: ${progress.done.toLocaleString()} of ${progress.total.toLocaleString()}`;
     if (activity === "launching") return "Starting Minecraft…";
@@ -27,7 +28,7 @@
     <BlockIcon seed={instance.id} size={96} />
     <div class="heading">
       <h1 id="instance-name">{instance.name}</h1>
-      <p class="secondary">Minecraft {instance.version} · {instance.loader === "vanilla" ? "Vanilla" : instance.loader}</p>
+      <p class="secondary">Minecraft {instance.version} · {launcher.loaderLabel(instance)}</p>
 
       <div class="play-row">
         {#if activity === "running"}
@@ -42,7 +43,7 @@
         <span class="status secondary" role="status" aria-live="polite">{status ?? ""}</span>
       </div>
 
-      {#if activity === "launching" && progress}
+      {#if activity === "launching" && progress && progress.total > 0}
         <progress max={progress.total} value={progress.done} aria-label="Download progress"></progress>
       {/if}
     </div>

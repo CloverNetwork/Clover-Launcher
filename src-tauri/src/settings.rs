@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::error::Result;
+use crate::loaders::LoaderSource;
 use crate::paths::Paths;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -9,11 +10,13 @@ pub struct Settings {
     /// Path to a `java` executable. "java" resolves from PATH.
     pub java_path: String,
     pub memory_mb: u32,
+    /// Fabric-compatible meta servers the person added.
+    pub loader_sources: Vec<LoaderSource>,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { java_path: "java".into(), memory_mb: 4096 }
+        Self { java_path: "java".into(), memory_mb: 4096, loader_sources: vec![] }
     }
 }
 

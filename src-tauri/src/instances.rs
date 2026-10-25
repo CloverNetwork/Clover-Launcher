@@ -10,8 +10,13 @@ use crate::paths::Paths;
 pub struct Instance {
     pub id: String,
     pub name: String,
+    /// The Minecraft version.
     pub version: String,
+    /// "vanilla", "custom", or a loader source ID such as "fabric".
     pub loader: String,
+    /// The loader's version, or the profile ID for a custom profile.
+    #[serde(default)]
+    pub loader_version: Option<String>,
     pub created_at: u64,
     pub last_played: Option<u64>,
     pub installed: bool,
@@ -49,7 +54,7 @@ pub fn save(paths: &Paths, instance: &Instance) -> Result<()> {
     Ok(())
 }
 
-pub fn create(paths: &Paths, name: &str, version: &str) -> Result<Instance> {
+pub fn create(paths: &Paths, name: &str, version: &str, loader: &str, loader_version: Option<String>) -> Result<Instance> {
     let name = name.trim();
     if name.is_empty() {
         return Err(msg("Give the instance a name."));
@@ -63,7 +68,8 @@ pub fn create(paths: &Paths, name: &str, version: &str) -> Result<Instance> {
         id: format!("{}-{suffix}", slug.trim_matches('-')),
         name: name.to_string(),
         version: version.to_string(),
-        loader: "vanilla".into(),
+        loader: loader.to_string(),
+        loader_version,
         created_at: now(),
         last_played: None,
         installed: false,

@@ -24,6 +24,11 @@ impl Paths {
         Ok(Self { root })
     }
 
+    #[cfg(test)]
+    pub fn at(root: PathBuf) -> Self {
+        Self { root }
+    }
+
     pub fn libraries(&self) -> PathBuf {
         self.root.join("libraries")
     }

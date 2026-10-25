@@ -8,15 +8,16 @@ use crate::auth::Session;
 use crate::error::Result;
 use crate::install::client_jar_path;
 use crate::instances::Instance;
-use crate::manifest::{ArgValue, Argument, VersionJson, rules_allow};
+use crate::manifest::{ArgValue, Argument, rules_allow};
 use crate::paths::Paths;
+use crate::profile::Resolved;
 use crate::settings::Settings;
 
 const CLASSPATH_SEPARATOR: &str = if cfg!(windows) { ";" } else { ":" };
 
 /// Builds the `java` command for an installed version, substituting the
 /// `${placeholders}` that version JSONs use in their arguments.
-pub fn build_command(paths: &Paths, instance: &Instance, version: &VersionJson, session: &Session, settings: &Settings) -> Result<Command> {
+pub fn build_command(paths: &Paths, instance: &Instance, version: &Resolved, session: &Session, settings: &Settings) -> Result<Command> {
     let game_dir = paths.instance(&instance.id).join("minecraft");
     let natives_dir = paths.instance(&instance.id).join("natives");
     std::fs::create_dir_all(&game_dir)?;
@@ -25,11 +26,10 @@ pub fn build_command(paths: &Paths, instance: &Instance, version: &VersionJson, 
     let mut classpath: Vec<String> = version
         .libraries
         .iter()
-        .filter(|l| rules_allow(&l.rules))
-        .filter_map(|l| l.downloads.as_ref()?.artifact.as_ref()?.path.as_ref())
-        .map(|p| paths.libraries().join(p).to_string_lossy().into_owned())
+        .filter_map(|l| l.artifact())
+        .map(|f| paths.libraries().join(f.path).to_string_lossy().into_owned())
         .collect();
-    classpath.push(client_jar_path(paths, &version.id).to_string_lossy().into_owned());
+    classpath.push(client_jar_path(paths, version).to_string_lossy().into_owned());
 
     let vars: HashMap<&str, String> = HashMap::from([
         ("auth_player_name", session.profile.name.clone()),
@@ -58,19 +58,20 @@ pub fn build_command(paths: &Paths, instance: &Instance, version: &VersionJson, 
     };
 
     let mut args = vec![format!("-Xmx{}M", settings.memory_mb)];
-    match &version.arguments {
-        Some(arguments) if !arguments.jvm.is_empty() => args.extend(flatten(&arguments.jvm)),
-        _ => args.extend(["-Djava.library.path=${natives_directory}".into(), "-cp".into(), "${classpath}".into()]),
+    args.extend(flatten(&version.jvm_args));
+    // Legacy versions declare no JVM arguments, and some loaders add a few without a classpath.
+    if !args.iter().any(|a| a.contains("${classpath}")) {
+        args.extend(["-Djava.library.path=${natives_directory}".into(), "-cp".into(), "${classpath}".into()]);
     }
-    if let Some(logging) = version.logging.as_ref().and_then(|l| l.client.as_ref()) {
+    if let Some(logging) = &version.logging {
         let config = paths.assets().join("log_configs").join(&logging.file.id);
         args.push(logging.argument.replace("${path}", &config.to_string_lossy()));
     }
     args.push(version.main_class.clone());
-    match (&version.arguments, &version.minecraft_arguments) {
-        (Some(arguments), _) => args.extend(flatten(&arguments.game)),
-        (None, Some(legacy)) => args.extend(legacy.split_whitespace().map(String::from)),
-        (None, None) => {}
+    let game_args = flatten(&version.game_args);
+    match (&version.legacy_game_args, game_args.is_empty()) {
+        (Some(legacy), true) => args.extend(legacy.split_whitespace().map(String::from)),
+        _ => args.extend(game_args),
     }
 
     let mut command = Command::new(&settings.java_path);
@@ -94,12 +95,12 @@ fn flatten(arguments: &[Argument]) -> Vec<String> {
 
 /// Versions before 1.19 ship natives as classifier jars that must be unpacked.
 /// Newer LWJGL builds load natives from the classpath themselves.
-fn extract_natives(paths: &Paths, version: &VersionJson, natives_dir: &Path) -> Result<()> {
+fn extract_natives(paths: &Paths, version: &Resolved, natives_dir: &Path) -> Result<()> {
     std::fs::create_dir_all(natives_dir)?;
-    for lib in version.libraries.iter().filter(|l| rules_allow(&l.rules)) {
-        let Some(path) = lib.native_artifact().and_then(|a| a.path.as_ref()) else { continue };
+    for lib in &version.libraries {
+        let Some(file) = lib.native_artifact() else { continue };
         let excludes = lib.extract.as_ref().map(|e| e.exclude.as_slice()).unwrap_or_default();
-        let mut archive = zip::ZipArchive::new(File::open(paths.libraries().join(path))?)?;
+        let mut archive = zip::ZipArchive::new(File::open(paths.libraries().join(file.path))?)?;
         for i in 0..archive.len() {
             let mut entry = archive.by_index(i)?;
             let Some(name) = entry.enclosed_name() else { continue };

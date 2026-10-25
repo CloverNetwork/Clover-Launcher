@@ -1,5 +1,5 @@
 import { ask } from "@tauri-apps/plugin-dialog";
-import { api, errorText, events, type Instance, type Profile } from "./api";
+import { api, errorText, events, type Instance, type LoaderSource, type Profile } from "./api";
 
 const MAX_LOG_LINES = 2000;
 
@@ -10,7 +10,8 @@ class Launcher {
   selectedId = $state<string | null>(null);
   account = $state<Profile | null>(null);
   activity = $state<Record<string, Activity>>({});
-  progress = $state<Record<string, { done: number; total: number }>>({});
+  progress = $state<Record<string, { stage: string | null; done: number; total: number }>>({});
+  loaders = $state<LoaderSource[]>([]);
   logs = $state<Record<string, string[]>>({});
   /** Inline error for the selected instance, shown in the detail view rather than an alert. */
   error = $state<{ instanceId: string; message: string } | null>(null);
@@ -24,8 +25,9 @@ class Launcher {
 
   async init() {
     await Promise.all([
-      events.installProgress(({ instanceId, done, total }) => {
-        this.progress[instanceId] = { done, total };
+      events.installProgress(({ instanceId, stage, done, total }) => {
+        // A new stage resets the file count; file updates keep the current stage.
+        this.progress[instanceId] = stage ? { stage, done: 0, total: 0 } : { stage: null, done, total };
       }),
       events.gameLog(({ instanceId, line }) => {
         const lines = (this.logs[instanceId] ??= []);
@@ -41,7 +43,7 @@ class Launcher {
       }),
     ]);
     this.account = await api.getAccount();
-    await this.reload();
+    await Promise.all([this.reload(), this.reloadLoaders()]);
   }
 
   async reload() {
@@ -51,12 +53,32 @@ class Launcher {
     }
   }
 
+  async reloadLoaders() {
+    this.loaders = await api.listLoaders();
+  }
+
+  /** "Vanilla", "Fabric 0.20.1", "Forge 54.1.0", or "Custom Profile". */
+  loaderLabel(instance: Instance) {
+    if (instance.loader === "vanilla") return "Vanilla";
+    if (instance.loader === "custom") return "Custom Profile";
+    const name = this.loaders.find((l) => l.id === instance.loader)?.name ?? instance.loader;
+    const version = instance.loaderVersion?.replace(`${instance.version}-`, "") ?? "";
+    return `${name} ${version}`.trim();
+  }
+
   replace(instance: Instance) {
     this.instances = this.instances.map((i) => (i.id === instance.id ? instance : i));
   }
 
-  async create(name: string, version: string) {
-    const instance = await api.createInstance(name, version);
+  async create(name: string, version: string, loader: string, loaderVersion: string | null) {
+    await this.select(await api.createInstance(name, version, loader, loaderVersion));
+  }
+
+  async createFromProfile(name: string, path: string) {
+    await this.select(await api.createInstanceFromProfile(name, path));
+  }
+
+  private async select(instance: Instance) {
     await this.reload();
     this.selectedId = instance.id;
   }

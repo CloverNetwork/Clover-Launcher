@@ -5,14 +5,26 @@ export type Instance = {
   id: string;
   name: string;
   version: string;
+  /** "vanilla", "custom", or a loader source ID such as "fabric". */
   loader: string;
+  /** The loader's version, or the profile ID for a custom profile. */
+  loaderVersion: string | null;
   createdAt: number;
   lastPlayed: number | null;
   installed: boolean;
 };
 
 export type VersionEntry = { id: string; type: string; releaseTime: string };
-export type Settings = { javaPath: string; memoryMb: number };
+export type LoaderSource = {
+  id: string;
+  name: string;
+  kind: "meta" | "forge" | "neoForge";
+  url?: string;
+  loaderPath?: string;
+  custom: boolean;
+};
+export type LoaderVersion = { version: string; label: string; stable: boolean };
+export type Settings = { javaPath: string; memoryMb: number; loaderSources: LoaderSource[] };
 export type Profile = { uuid: string; name: string };
 export type DeviceCode = {
   userCode: string;
@@ -22,14 +34,23 @@ export type DeviceCode = {
   expiresIn: number;
 };
 
-export type InstallProgress = { instanceId: string; done: number; total: number };
+export type InstallProgress = { instanceId: string; stage: string | null; done: number; total: number };
 export type LogLine = { instanceId: string; line: string };
 export type GameExit = { instanceId: string; code: number | null };
 
 export const api = {
-  listVersions: (includeSnapshots: boolean) => invoke<VersionEntry[]>("list_versions", { includeSnapshots }),
+  listVersions: (includeAll: boolean) => invoke<VersionEntry[]>("list_versions", { includeAll }),
   listInstances: () => invoke<Instance[]>("list_instances"),
-  createInstance: (name: string, version: string) => invoke<Instance>("create_instance", { name, version }),
+  listLoaders: () => invoke<LoaderSource[]>("list_loaders"),
+  listLoaderVersions: (loader: string, gameVersion: string) =>
+    invoke<LoaderVersion[]>("list_loader_versions", { loader, gameVersion }),
+  addLoaderSource: (name: string, url: string, loaderPath: string) =>
+    invoke<LoaderSource>("add_loader_source", { name, url, loaderPath }),
+  removeLoaderSource: (id: string) => invoke<void>("remove_loader_source", { id }),
+  createInstance: (name: string, version: string, loader: string, loaderVersion: string | null) =>
+    invoke<Instance>("create_instance", { name, version, loader, loaderVersion }),
+  createInstanceFromProfile: (name: string, path: string) =>
+    invoke<Instance>("create_instance_from_profile", { name, path }),
   deleteInstance: (id: string) => invoke<void>("delete_instance", { id }),
   installInstance: (id: string) => invoke<Instance>("install_instance", { id }),
   launchInstance: (id: string) => invoke<Instance>("launch_instance", { id }),
