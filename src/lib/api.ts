@@ -24,7 +24,35 @@ export type LoaderSource = {
   custom: boolean;
 };
 export type LoaderVersion = { version: string; label: string; stable: boolean };
-export type Settings = { javaPath: string; memoryMb: number; loaderSources: LoaderSource[] };
+export type Settings = {
+  javaPath: string;
+  memoryMb: number;
+  loaderSources: LoaderSource[];
+  curseforgeApiKey: string;
+};
+export type ModSource = "modrinth" | "curseforge";
+export type ModHit = {
+  source: ModSource;
+  id: string;
+  title: string;
+  author: string;
+  description: string;
+  iconUrl: string | null;
+  downloads: number;
+  pageUrl: string;
+};
+export type ModPage = { hits: ModHit[]; total: number };
+export type InstalledMod = {
+  file: string;
+  title: string;
+  source: ModSource | null;
+  projectId: string | null;
+  version: string | null;
+  iconUrl: string | null;
+  /** Installed because another mod needs it. */
+  dependency: boolean;
+  enabled: boolean;
+};
 export type Profile = { uuid: string; name: string; offline: boolean };
 export type Accounts = { active: string | null; accounts: Profile[] };
 export type SkinVariant = "classic" | "slim";
@@ -62,6 +90,14 @@ export const api = {
   verifyInstance: (id: string) => invoke<[Instance, number]>("verify_instance", { id }),
   launchInstance: (id: string) => invoke<Instance>("launch_instance", { id }),
   stopInstance: (id: string) => invoke<void>("stop_instance", { id }),
+  searchMods: (id: string, source: ModSource, query: string, offset: number) =>
+    invoke<ModPage>("search_mods", { id, source, query, offset }),
+  listMods: (id: string) => invoke<InstalledMod[]>("list_mods", { id }),
+  /** Resolves to the titles of everything added, dependencies included. */
+  installMod: (id: string, source: ModSource, project: string) => invoke<string[]>("install_mod", { id, source, project }),
+  setModEnabled: (id: string, file: string, enabled: boolean) => invoke<void>("set_mod_enabled", { id, file, enabled }),
+  removeMod: (id: string, file: string) => invoke<void>("remove_mod", { id, file }),
+  showModsFolder: (id: string) => invoke<void>("show_mods_folder", { id }),
   /** The recent output of an instance's game and installers. */
   gameLog: (id: string) => invoke<string[]>("game_log", { id }),
   openLogWindow: (id: string) => invoke<void>("open_log_window", { id }),

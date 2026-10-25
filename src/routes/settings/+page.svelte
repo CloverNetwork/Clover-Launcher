@@ -90,6 +90,23 @@
         <p class="hint secondary">Maximum memory Minecraft can use. 4 GB suits most worlds; modded packs may need more.</p>
       </div>
 
+      <label for="curseforge">CurseForge:</label>
+      <div>
+        <input
+          id="curseforge"
+          class="field"
+          type="password"
+          bind:value={settings.curseforgeApiKey}
+          oninput={save}
+          placeholder="API key"
+          spellcheck="false"
+          autocomplete="off"
+        />
+        <p class="hint secondary">
+          Needed to add mods from CurseForge. Get a free key at console.curseforge.com. Modrinth works without one.
+        </p>
+      </div>
+
       {#if error}
         <p class="error" role="alert">{error}</p>
       {/if}

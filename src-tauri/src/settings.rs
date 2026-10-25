@@ -13,17 +13,25 @@ pub struct Settings {
     pub memory_mb: u32,
     /// Fabric-compatible meta servers the person added.
     pub loader_sources: Vec<LoaderSource>,
+    /// The person's own CurseForge API key, from console.curseforge.com.
+    pub curseforge_api_key: String,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { java_path: String::new(), memory_mb: 4096, loader_sources: vec![] }
+        Self { java_path: String::new(), memory_mb: 4096, loader_sources: vec![], curseforge_api_key: String::new() }
     }
 }
 
 impl Settings {
     /// The person's own Java, if they chose one. Older settings stored "java" for "the one on
     /// the PATH"; that now means automatic too.
+    /// The key from Settings, or one built in with `CURSEFORGE_API_KEY` at compile time.
+    /// Keys are kept out of the source code.
+    pub fn curseforge_key(&self) -> Option<&str> {
+        Some(self.curseforge_api_key.trim()).filter(|k| !k.is_empty()).or(option_env!("CURSEFORGE_API_KEY"))
+    }
+
     pub fn custom_java(&self) -> Option<&str> {
         Some(self.java_path.trim()).filter(|p| !p.is_empty() && *p != "java")
     }

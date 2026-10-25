@@ -11,6 +11,7 @@
   import InstanceDetail from "$lib/components/InstanceDetail.svelte";
   import InstanceGrid from "$lib/components/InstanceGrid.svelte";
   import NewInstanceSheet from "$lib/components/NewInstanceSheet.svelte";
+  import ModBrowserSheet from "$lib/components/ModBrowserSheet.svelte";
   import Sidebar from "$lib/components/Sidebar.svelte";
   import WardrobeSheet from "$lib/components/WardrobeSheet.svelte";
 
@@ -188,6 +189,7 @@
 <NewInstanceSheet />
 <AccountSheet />
 <WardrobeSheet />
+<ModBrowserSheet />
 
 <style>
   .window {

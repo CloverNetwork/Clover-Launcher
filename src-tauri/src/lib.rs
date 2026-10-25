@@ -9,6 +9,7 @@ mod launch;
 mod loaders;
 mod manifest;
 mod mclogs;
+mod mods;
 mod menu;
 mod paths;
 mod profile;
@@ -179,6 +180,50 @@ async fn launch_instance(app: AppHandle, state: State<'_, AppState>, running: St
 #[tauri::command]
 fn game_log(logs: State<'_, GameLogs>, id: String) -> Vec<String> {
     logs.lines(&id)
+}
+
+#[tauri::command]
+async fn search_mods(
+    state: State<'_, AppState>,
+    id: String,
+    source: mods::Source,
+    query: String,
+    offset: u32,
+) -> Result<mods::SearchPage> {
+    let instance = instances::get(&state.paths, &id)?;
+    let settings = settings::load(&state.paths);
+    let sites = mods::Sites { client: &state.http, curseforge_key: settings.curseforge_key() };
+    mods::search(&sites, &mods::Target::for_instance(&instance)?, source, &query, offset).await
+}
+
+#[tauri::command]
+fn list_mods(state: State<'_, AppState>, id: String) -> Result<Vec<mods::InstalledMod>> {
+    mods::installed(&state.paths, &instances::get(&state.paths, &id)?)
+}
+
+/// Installs a mod and its required dependencies. Returns the titles of what was added.
+#[tauri::command]
+async fn install_mod(state: State<'_, AppState>, id: String, source: mods::Source, project: String) -> Result<Vec<String>> {
+    let instance = instances::get(&state.paths, &id)?;
+    let settings = settings::load(&state.paths);
+    let sites = mods::Sites { client: &state.http, curseforge_key: settings.curseforge_key() };
+    mods::install(&sites, &state.paths, &instance, source, &project).await
+}
+
+#[tauri::command]
+fn set_mod_enabled(state: State<'_, AppState>, id: String, file: String, enabled: bool) -> Result<()> {
+    mods::set_enabled(&state.paths, &instances::get(&state.paths, &id)?, &file, enabled)
+}
+
+#[tauri::command]
+fn remove_mod(state: State<'_, AppState>, id: String, file: String) -> Result<()> {
+    mods::remove(&state.paths, &instances::get(&state.paths, &id)?, &file)
+}
+
+#[tauri::command]
+fn show_mods_folder(app: AppHandle, state: State<'_, AppState>, id: String) -> Result<()> {
+    let dir = mods::folder(&state.paths, &instances::get(&state.paths, &id)?)?;
+    app.opener().open_path(dir.to_string_lossy(), None::<&str>).map_err(|e| msg(e.to_string()))
 }
 
 /// Shares an instance's log on mclo.gs, with access tokens and the home folder removed.
@@ -368,7 +413,8 @@ pub fn run() {
         .manage(GameLogs::default())
         .setup(|app| {
             let http = Client::builder()
-                .user_agent(concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION")))
+                // Modrinth asks clients to name themselves this way.
+                .user_agent(concat!("CloverNetwork/Clover-Launcher/", env!("CARGO_PKG_VERSION")))
                 .build()?;
             let paths = Paths::new(app.handle())?;
             app.set_menu(menu::build(app.handle(), &auth::accounts(&paths))?)?;
@@ -390,6 +436,12 @@ pub fn run() {
             launch_instance,
             stop_instance,
             game_log,
+            search_mods,
+            list_mods,
+            install_mod,
+            set_mod_enabled,
+            remove_mod,
+            show_mods_folder,
             upload_log,
             open_log_window,
             pop_in_log_window,

@@ -41,6 +41,9 @@ class Launcher {
   newInstanceOpen = $state(false);
   accountOpen = $state(false);
   skinsOpen = $state(false);
+  modsOpen = $state(false);
+  /** Bumped when mods change, so lists showing them reload. */
+  modsRevision = $state(0);
 
   selected = $derived(this.instances.find((i) => i.id === this.selectedId) ?? null);
 

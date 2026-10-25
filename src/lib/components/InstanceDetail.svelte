@@ -3,6 +3,7 @@
   import { launcher } from "$lib/launcher.svelte";
   import BlockIcon from "./BlockIcon.svelte";
   import Icon from "./Icon.svelte";
+  import ModsSection from "./ModsSection.svelte";
 
   let { instance }: { instance: Instance } = $props();
 
@@ -68,6 +69,10 @@
       <dd><button class="link" onclick={() => launcher.showFolder(instance.id)}>Show in Finder</button></dd>
     </div>
   </dl>
+
+  {#if instance.loader !== "vanilla" && instance.loader !== "custom"}
+    <ModsSection {instance} />
+  {/if}
 </article>
 
 <style>
