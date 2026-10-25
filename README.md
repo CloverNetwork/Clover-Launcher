@@ -29,7 +29,8 @@ pnpm tauri dev
 | `src-tauri/src/launch.rs` | Classpath, JVM and game arguments, legacy natives extraction |
 | `src-tauri/src/game.rs` | Spawns Java, streams the log (log4j XML turned into text), stops the game |
 | `src-tauri/src/smoke.rs` | End-to-end tests against real loader servers (ignored by default) |
-| `src-tauri/src/auth.rs` | Device code → Xbox Live → XSTS → Minecraft; refresh token in the OS keychain |
+| `src-tauri/src/auth.rs` | Device code → Xbox Live → XSTS → Minecraft; accounts, refresh tokens in the OS keychain, session cache |
+| `src-tauri/src/skins.rs` | Mojang skin and cape API, local skin library, texture cache |
 | `src-tauri/src/menu.rs` | Menu bar; every window command is also a menu command |
 | `src/lib/launcher.svelte.ts` | App state and actions |
 | `src/lib/components/` | Sidebar, detail view, sheets, game log, generated block icons |
@@ -63,6 +64,20 @@ installs, and these boot to the title screen on an Apple silicon Mac with Java 2
 with Fabric, Quilt, NeoForge and Forge, and Legacy Fabric 1.8.9. Two old versions need a
 different Java: Babric (Beta 1.7.3) needs Java 8, and vanilla 1.8.9 under Ornithe ships
 Intel-only LWJGL natives.
+
+## Skins and capes
+
+Game › Account › Skins & Capes… (⇧⌘K) opens the wardrobe:
+
+- **Preview:** a pixel-exact front and back view of any skin, both layers, with the selected cape
+  on the back. It handles 64×64 skins and the old 64×32 layout.
+- **Library:** skin files shared by every account, stored in `skins/`. Add PNGs, right-click to
+  remove one, or save the skin an account is wearing so you can switch back later.
+- **Capes:** the capes the account owns, plus No Cape.
+
+Choices are previewed and only sent to Mojang on Apply, because skin uploads are rate-limited.
+Offline accounts can build a library but can't wear skins. Minecraft access tokens are cached in
+memory for 23 hours, so wardrobe actions and launches skip the four-step sign-in.
 
 ## Branding
 

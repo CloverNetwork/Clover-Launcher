@@ -24,6 +24,7 @@ class Launcher {
   logVisible = $state(false);
   newInstanceOpen = $state(false);
   accountOpen = $state(false);
+  skinsOpen = $state(false);
 
   selected = $derived(this.instances.find((i) => i.id === this.selectedId) ?? null);
 

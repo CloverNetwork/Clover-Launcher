@@ -11,6 +11,7 @@
   import InstanceDetail from "$lib/components/InstanceDetail.svelte";
   import NewInstanceSheet from "$lib/components/NewInstanceSheet.svelte";
   import Sidebar from "$lib/components/Sidebar.svelte";
+  import WardrobeSheet from "$lib/components/WardrobeSheet.svelte";
 
   const menuActions: Record<string, () => void> = {
     new_instance: () => (launcher.newInstanceOpen = true),
@@ -22,6 +23,7 @@
     toggle_log: () => (launcher.logVisible = !launcher.logVisible),
     verify_files: () => launcher.verify(),
     add_account: () => (launcher.accountOpen = true),
+    skins: () => launcher.account && (launcher.skinsOpen = true),
     sign_out: () => launcher.signOut(),
   };
 
@@ -50,6 +52,8 @@
     const menu = await Menu.new({
       items: [
         ...accounts,
+        await PredefinedMenuItem.new({ item: "Separator" }),
+        await MenuItem.new({ text: "Skins & Capes…", accelerator: "CmdOrCtrl+Shift+K", action: () => (launcher.skinsOpen = true) }),
         await PredefinedMenuItem.new({ item: "Separator" }),
         await MenuItem.new({ text: "Add Account…", action: () => (launcher.accountOpen = true) }),
         await MenuItem.new({ text: `Sign Out ${launcher.account?.name ?? ""}`.trim(), action: () => launcher.signOut() }),
@@ -140,6 +144,7 @@
 
 <NewInstanceSheet />
 <AccountSheet />
+<WardrobeSheet />
 
 <style>
   .window {

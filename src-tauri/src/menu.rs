@@ -56,6 +56,8 @@ pub fn build(app: &AppHandle, accounts: &Accounts) -> tauri::Result<Menu<Wry>> {
         None => "Sign Out".into(),
     };
     let account = account
+        .item(&MenuItem::with_id(app, "skins", "Skins & Capes…", accounts.current().is_some(), Some("CmdOrCtrl+Shift+K"))?)
+        .separator()
         .item(&item("add_account", "Add Account…", None)?)
         .item(&MenuItem::with_id(app, "sign_out", sign_out_label, accounts.current().is_some(), None::<&str>)?)
         .build()?;

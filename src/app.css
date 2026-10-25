@@ -17,6 +17,7 @@
   --bg-control: rgba(0, 0, 0, 0.05);
   --bg-control-hover: rgba(0, 0, 0, 0.09);
   --bg-row-selected: rgba(0, 0, 0, 0.08);
+  --bg-segment-selected: #ffffff;
   --text: rgba(0, 0, 0, 0.85);
   --text-secondary: rgba(0, 0, 0, 0.55);
   --separator: rgba(0, 0, 0, 0.1);
@@ -50,6 +51,7 @@
     --bg-control: rgba(255, 255, 255, 0.08);
     --bg-control-hover: rgba(255, 255, 255, 0.12);
     --bg-row-selected: rgba(255, 255, 255, 0.1);
+    --bg-segment-selected: #636366;
     --text: rgba(255, 255, 255, 0.85);
     --text-secondary: rgba(255, 255, 255, 0.55);
     --separator: rgba(255, 255, 255, 0.1);

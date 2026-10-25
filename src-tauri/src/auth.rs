@@ -32,6 +32,7 @@ pub struct Profile {
 }
 
 /// What the game needs at launch. Never sent to the frontend.
+#[derive(Clone)]
 pub struct Session {
     pub profile: Profile,
     pub access_token: String,
@@ -183,9 +184,41 @@ pub fn current(paths: &Paths) -> Option<Profile> {
     accounts(paths).current().cloned()
 }
 
-/// Exchanges the stored refresh token for a fresh Minecraft session.
-pub async fn session(client: &Client, paths: &Paths) -> Result<Session> {
+/// Minecraft access tokens last 24 hours; reusing one skips four sign-in requests.
+const SESSION_LIFETIME: Duration = Duration::from_secs(23 * 60 * 60);
+
+/// Sessions minted this run, keyed by account UUID. Kept in memory only.
+#[derive(Default)]
+pub struct SessionCache(std::sync::Mutex<std::collections::HashMap<String, (Session, Instant)>>);
+
+impl SessionCache {
+    fn get(&self, uuid: &str) -> Option<Session> {
+        let cache = self.0.lock().unwrap();
+        cache.get(uuid).filter(|(_, minted)| minted.elapsed() < SESSION_LIFETIME).map(|(s, _)| s.clone())
+    }
+
+    fn put(&self, session: &Session) {
+        self.0.lock().unwrap().insert(session.profile.uuid.clone(), (session.clone(), Instant::now()));
+    }
+
+    pub fn forget(&self, uuid: &str) {
+        self.0.lock().unwrap().remove(uuid);
+    }
+}
+
+/// The active account's session, reusing a cached token while it's still valid.
+pub async fn session(client: &Client, paths: &Paths, cache: &SessionCache) -> Result<Session> {
     let profile = current(paths).ok_or_else(|| msg("Sign in with a Microsoft account to play."))?;
+    if let Some(session) = cache.get(&profile.uuid) {
+        return Ok(session);
+    }
+    let session = fresh_session(client, profile).await?;
+    cache.put(&session);
+    Ok(session)
+}
+
+/// Exchanges the stored refresh token for a fresh Minecraft session.
+async fn fresh_session(client: &Client, profile: Profile) -> Result<Session> {
     if profile.offline {
         if !OFFLINE_ALLOWED {
             return Err(msg("Offline accounts only work in development builds. Sign in with Microsoft to play."));

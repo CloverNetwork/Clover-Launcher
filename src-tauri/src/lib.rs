@@ -11,6 +11,7 @@ mod menu;
 mod paths;
 mod profile;
 mod settings;
+mod skins;
 #[cfg(test)]
 mod smoke;
 
@@ -31,6 +32,32 @@ use crate::settings::Settings;
 struct AppState {
     paths: Paths,
     http: Client,
+    sessions: auth::SessionCache,
+}
+
+impl AppState {
+    /// The active account's token for Mojang's profile API. Offline accounts have none.
+    async fn ms_session(&self) -> Result<auth::Session> {
+        let session = auth::session(&self.http, &self.paths, &self.sessions).await?;
+        if session.profile.offline {
+            return Err(msg("Skins and capes need a Microsoft account."));
+        }
+        Ok(session)
+    }
+
+    /// Runs a wardrobe change, dropping the cached token if Mojang rejected it.
+    async fn with_wardrobe<F, Fut>(&self, change: F) -> Result<skins::Wardrobe>
+    where
+        F: FnOnce(Client, String) -> Fut,
+        Fut: std::future::Future<Output = Result<skins::Wardrobe>>,
+    {
+        let session = self.ms_session().await?;
+        let result = change(self.http.clone(), session.access_token).await;
+        if result.is_err() {
+            self.sessions.forget(&session.profile.uuid);
+        }
+        result
+    }
 }
 
 #[tauri::command]
@@ -131,7 +158,7 @@ async fn launch_instance(app: AppHandle, state: State<'_, AppState>, running: St
     }
     let mut instance = instances::get(&state.paths, &id)?;
     // Sign in first so a missing account fails before a long download.
-    let session = auth::session(&state.http, &state.paths).await?;
+    let session = auth::session(&state.http, &state.paths, &state.sessions).await?;
     // Always re-verify files; already-valid ones are skipped.
     let settings = settings::load(&state.paths);
     let mut reporter = AppReporter::new(app.clone(), id.clone());
@@ -191,6 +218,7 @@ fn switch_account(app: AppHandle, state: State<'_, AppState>, uuid: String) -> R
 #[tauri::command]
 fn remove_account(app: AppHandle, state: State<'_, AppState>, uuid: String) -> Result<auth::Accounts> {
     auth::remove(&state.paths, &uuid)?;
+    state.sessions.forget(&uuid);
     accounts_changed(&app, &state.paths)
 }
 
@@ -211,6 +239,84 @@ fn sign_in_offline(app: AppHandle, state: State<'_, AppState>, name: String) -> 
     accounts_changed(&app, &state.paths)
 }
 
+/// The active account's skins and capes. `None` for offline accounts, which have no wardrobe.
+#[tauri::command]
+async fn get_wardrobe(state: State<'_, AppState>) -> Result<Option<skins::Wardrobe>> {
+    match auth::current(&state.paths) {
+        Some(profile) if !profile.offline => Ok(Some(state.with_wardrobe(|http, token| async move { skins::wardrobe(&http, &token).await }).await?)),
+        _ => Ok(None),
+    }
+}
+
+#[tauri::command]
+fn list_skin_library(state: State<'_, AppState>) -> Vec<skins::LibrarySkin> {
+    skins::library(&state.paths)
+}
+
+#[tauri::command]
+fn add_skin_to_library(state: State<'_, AppState>, path: String, variant: skins::Variant) -> Result<skins::LibrarySkin> {
+    let png = std::fs::read(&path).map_err(|e| msg(format!("Couldn't read that file ({e}).")))?;
+    let name = std::path::Path::new(&path).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+    skins::add_to_library(&state.paths, &png, &name, variant)
+}
+
+#[tauri::command]
+fn update_library_skin(
+    state: State<'_, AppState>,
+    id: String,
+    name: Option<String>,
+    variant: Option<skins::Variant>,
+) -> Result<skins::LibrarySkin> {
+    skins::update_library_skin(&state.paths, &id, name.as_deref(), variant)
+}
+
+#[tauri::command]
+fn remove_library_skin(state: State<'_, AppState>, id: String) -> Result<()> {
+    skins::remove_from_library(&state.paths, &id)
+}
+
+#[tauri::command]
+fn library_skin_texture(state: State<'_, AppState>, id: String) -> Result<String> {
+    skins::library_texture(&state.paths, &id)
+}
+
+#[tauri::command]
+async fn skin_texture(state: State<'_, AppState>, url: String) -> Result<String> {
+    skins::texture(&state.http, &state.paths, &url).await
+}
+
+/// Keeps a copy of the skin the account is wearing, so it can be worn again later.
+#[tauri::command]
+async fn save_worn_skin(state: State<'_, AppState>, url: String, variant: skins::Variant, name: String) -> Result<skins::LibrarySkin> {
+    let png = skins::texture_bytes(&state.http, &state.paths, &url).await?;
+    skins::add_to_library(&state.paths, &png, &name, variant)
+}
+
+/// Uploads a library skin to the active account and wears it.
+#[tauri::command]
+async fn wear_library_skin(state: State<'_, AppState>, id: String) -> Result<skins::Wardrobe> {
+    let skin = skins::library(&state.paths).into_iter().find(|s| s.id == id).ok_or_else(|| msg("That skin isn't in the library any more."))?;
+    let png = skins::library_png(&state.paths, &id)?;
+    state.with_wardrobe(|http, token| async move { skins::upload(&http, &token, png, skin.variant).await }).await
+}
+
+/// Switches the worn skin between classic and slim arms.
+#[tauri::command]
+async fn set_skin_variant(state: State<'_, AppState>, variant: skins::Variant) -> Result<skins::Wardrobe> {
+    state
+        .with_wardrobe(|http, token| async move {
+            let current = skins::wardrobe(&http, &token).await?;
+            let active = current.skins.iter().find(|s| s.state == "ACTIVE").ok_or_else(|| msg("This account isn't wearing a skin."))?;
+            skins::wear_url(&http, &token, &active.url, variant).await
+        })
+        .await
+}
+
+#[tauri::command]
+async fn wear_cape(state: State<'_, AppState>, cape_id: Option<String>) -> Result<skins::Wardrobe> {
+    state.with_wardrobe(|http, token| async move { skins::wear_cape(&http, &token, cape_id.as_deref()).await }).await
+}
+
 #[tauri::command]
 fn open_settings(app: AppHandle) {
     menu::open_settings(&app);
@@ -228,7 +334,7 @@ pub fn run() {
                 .build()?;
             let paths = Paths::new(app.handle())?;
             app.set_menu(menu::build(app.handle(), &auth::accounts(&paths))?)?;
-            app.manage(AppState { paths, http });
+            app.manage(AppState { paths, http, sessions: auth::SessionCache::default() });
             app.on_menu_event(|app, event| menu::handle(app, event.id().as_ref()));
             Ok(())
         })
@@ -255,6 +361,17 @@ pub fn run() {
             finish_sign_in,
             sign_in_offline,
             open_settings,
+            get_wardrobe,
+            list_skin_library,
+            add_skin_to_library,
+            update_library_skin,
+            remove_library_skin,
+            library_skin_texture,
+            skin_texture,
+            wear_library_skin,
+            save_worn_skin,
+            set_skin_variant,
+            wear_cape,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

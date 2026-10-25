@@ -27,6 +27,11 @@ export type LoaderVersion = { version: string; label: string; stable: boolean };
 export type Settings = { javaPath: string; memoryMb: number; loaderSources: LoaderSource[] };
 export type Profile = { uuid: string; name: string; offline: boolean };
 export type Accounts = { active: string | null; accounts: Profile[] };
+export type SkinVariant = "classic" | "slim";
+export type RemoteSkin = { id: string; state: "ACTIVE" | "INACTIVE"; url: string; variant: "CLASSIC" | "SLIM" };
+export type RemoteCape = { id: string; state: "ACTIVE" | "INACTIVE"; url: string; alias: string | null };
+export type Wardrobe = { skins: RemoteSkin[]; capes: RemoteCape[] };
+export type LibrarySkin = { id: string; name: string; variant: SkinVariant };
 export type DeviceCode = {
   userCode: string;
   deviceCode: string;
@@ -68,6 +73,20 @@ export const api = {
   /** Development builds only; release builds refuse it. */
   signInOffline: (name: string) => invoke<Accounts>("sign_in_offline", { name }),
   openSettings: () => invoke<void>("open_settings"),
+  /** `null` for offline accounts, which have no skins on Mojang's servers. */
+  getWardrobe: () => invoke<Wardrobe | null>("get_wardrobe"),
+  listSkinLibrary: () => invoke<LibrarySkin[]>("list_skin_library"),
+  addSkinToLibrary: (path: string, variant: SkinVariant) => invoke<LibrarySkin>("add_skin_to_library", { path, variant }),
+  updateLibrarySkin: (id: string, changes: { name?: string; variant?: SkinVariant }) =>
+    invoke<LibrarySkin>("update_library_skin", { id, ...changes }),
+  removeLibrarySkin: (id: string) => invoke<void>("remove_library_skin", { id }),
+  librarySkinTexture: (id: string) => invoke<string>("library_skin_texture", { id }),
+  skinTexture: (url: string) => invoke<string>("skin_texture", { url }),
+  saveWornSkin: (url: string, variant: SkinVariant, name: string) =>
+    invoke<LibrarySkin>("save_worn_skin", { url, variant, name }),
+  wearLibrarySkin: (id: string) => invoke<Wardrobe>("wear_library_skin", { id }),
+  setSkinVariant: (variant: SkinVariant) => invoke<Wardrobe>("set_skin_variant", { variant }),
+  wearCape: (capeId: string | null) => invoke<Wardrobe>("wear_cape", { capeId }),
 };
 
 export const events = {
