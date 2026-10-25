@@ -8,12 +8,15 @@
     instanceId,
     lines,
     onPopOut,
+    onPopIn,
     standalone = false,
   }: {
     instanceId: string;
     lines: string[];
     /** Shows the button that moves the log into its own window. */
     onPopOut?: () => void;
+    /** Shows the button that puts the log back under the instance page. */
+    onPopIn?: () => void;
     /** Fills its own window instead of sitting under the instance page. */
     standalone?: boolean;
   } = $props();
@@ -94,6 +97,11 @@
     {#if onPopOut}
       <button class="icon-button" aria-label="Open in Separate Window" title="Open in Separate Window" onclick={onPopOut}>
         <Icon name="popout" size={14} />
+      </button>
+    {/if}
+    {#if onPopIn}
+      <button class="icon-button" aria-label="Show in Main Window" title="Show in Main Window" onclick={onPopIn}>
+        <Icon name="popin" size={14} />
       </button>
     {/if}
   </header>

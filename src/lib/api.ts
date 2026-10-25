@@ -65,6 +65,8 @@ export const api = {
   /** The recent output of an instance's game and installers. */
   gameLog: (id: string) => invoke<string[]>("game_log", { id }),
   openLogWindow: (id: string) => invoke<void>("open_log_window", { id }),
+  /** Closes a log window and shows the log under the instance page again. */
+  popInLogWindow: (id: string) => invoke<void>("pop_in_log_window", { id }),
   /** Shares the log on mclo.gs; tokens and the home folder are removed first. */
   uploadLog: (id: string) => invoke<{ url: string }>("upload_log", { id }),
   showInstanceFolder: (id: string) => invoke<void>("show_instance_folder", { id }),
@@ -99,6 +101,7 @@ export const events = {
   gameLog: (fn: (l: LogLine) => void) => listen<LogLine>("game-log", (e) => fn(e.payload)),
   gameExit: (fn: (x: GameExit) => void) => listen<GameExit>("game-exit", (e) => fn(e.payload)),
   /** A new launch started this instance's log over. */
+  logPoppedIn: (fn: (instanceId: string) => void) => listen<string>("log-popped-in", (e) => fn(e.payload)),
   gameLogCleared: (fn: (instanceId: string) => void) => listen<string>("game-log-cleared", (e) => fn(e.payload)),
   menu: (fn: (id: string) => void) => listen<string>("menu-command", (e) => fn(e.payload)),
 };

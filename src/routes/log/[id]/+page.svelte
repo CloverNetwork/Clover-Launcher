@@ -24,4 +24,4 @@
   });
 </script>
 
-<GameLog instanceId={id} {lines} standalone />
+<GameLog instanceId={id} {lines} standalone onPopIn={() => api.popInLogWindow(id)} />

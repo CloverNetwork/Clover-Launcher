@@ -55,6 +55,10 @@ class Launcher {
         lines.push(line);
         if (lines.length > MAX_LOG_LINES) lines.splice(0, lines.length - MAX_LOG_LINES);
       }),
+      events.logPoppedIn((instanceId) => {
+        this.open(instanceId);
+        this.logVisible = true;
+      }),
       events.gameExit(({ instanceId, code }) => {
         delete this.activity[instanceId];
         if (code !== null && code !== 0) {

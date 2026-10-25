@@ -206,6 +206,11 @@ fn open_log_window(app: AppHandle, state: State<'_, AppState>, id: String) -> Re
 }
 
 #[tauri::command]
+fn pop_in_log_window(app: AppHandle, id: String) -> Result<()> {
+    Ok(game::pop_in_log_window(&app, &id)?)
+}
+
+#[tauri::command]
 fn stop_instance(running: State<'_, Running>, id: String) {
     running.stop(&id);
 }
@@ -387,6 +392,7 @@ pub fn run() {
             game_log,
             upload_log,
             open_log_window,
+            pop_in_log_window,
             show_instance_folder,
             get_settings,
             save_settings,

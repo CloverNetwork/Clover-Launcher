@@ -56,6 +56,18 @@ pub fn open_log_window(app: &AppHandle, instance_id: &str, name: &str) -> tauri:
     Ok(())
 }
 
+/// Moves a log window's contents back under the instance page in the main window.
+pub fn pop_in_log_window(app: &AppHandle, instance_id: &str) -> tauri::Result<()> {
+    app.emit_to("main", "log-popped-in", instance_id)?;
+    if let Some(main) = app.get_webview_window("main") {
+        main.set_focus()?;
+    }
+    if let Some(window) = app.get_webview_window(&format!("log-{instance_id}")) {
+        window.close()?;
+    }
+    Ok(())
+}
+
 /// Running games, keyed by instance ID. Sending on the channel stops the game.
 #[derive(Default)]
 pub struct Running(Mutex<HashMap<String, oneshot::Sender<()>>>);
