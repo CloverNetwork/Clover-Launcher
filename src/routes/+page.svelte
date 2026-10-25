@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { LogicalPosition } from "@tauri-apps/api/dpi";
+  import { CheckMenuItem, Menu, MenuItem, PredefinedMenuItem } from "@tauri-apps/api/menu";
   import { events } from "$lib/api";
   import { launcher } from "$lib/launcher.svelte";
   import AccountSheet from "$lib/components/AccountSheet.svelte";
@@ -18,13 +20,49 @@
     delete_instance: () => launcher.remove(),
     toggle_sidebar: () => (launcher.sidebarVisible = !launcher.sidebarVisible),
     toggle_log: () => (launcher.logVisible = !launcher.logVisible),
-    account: () => (launcher.accountOpen = true),
+    verify_files: () => launcher.verify(),
+    add_account: () => (launcher.accountOpen = true),
+    sign_out: () => launcher.signOut(),
   };
+
+  function onMenuCommand(id: string) {
+    // Game › Account lists each account as "account:<uuid>".
+    if (id.startsWith("account:")) launcher.switchAccount(id.slice("account:".length));
+    else menuActions[id]?.();
+  }
+
+  /** The toolbar account button: a pull-down of accounts, like the menu bar's Game › Account. */
+  async function showAccountMenu(e: MouseEvent) {
+    if (!launcher.accounts.length) {
+      launcher.accountOpen = true;
+      return;
+    }
+    const button = e.currentTarget as HTMLElement;
+    const accounts = await Promise.all(
+      launcher.accounts.map((account) =>
+        CheckMenuItem.new({
+          text: account.offline ? `${account.name} (Offline)` : account.name,
+          checked: account.uuid === launcher.activeAccountId,
+          action: () => launcher.switchAccount(account.uuid),
+        }),
+      ),
+    );
+    const menu = await Menu.new({
+      items: [
+        ...accounts,
+        await PredefinedMenuItem.new({ item: "Separator" }),
+        await MenuItem.new({ text: "Add Account…", action: () => (launcher.accountOpen = true) }),
+        await MenuItem.new({ text: `Sign Out ${launcher.account?.name ?? ""}`.trim(), action: () => launcher.signOut() }),
+      ],
+    });
+    const rect = button.getBoundingClientRect();
+    await menu.popup(new LogicalPosition(rect.left, rect.bottom + 4));
+  }
 
   onMount(() => {
     document.body.classList.add("vibrant");
     launcher.init();
-    const unlisten = events.menu((id) => menuActions[id]?.());
+    const unlisten = events.menu(onMenuCommand);
 
     // Collapse the sidebar when the window gets narrow, and bring it back when it widens.
     const narrow = matchMedia("(max-width: 700px)");
@@ -68,9 +106,19 @@
           <Icon name="log" />
         </button>
       {/if}
-      <button class="account" onclick={() => (launcher.accountOpen = true)}>
+      <button
+        class="account"
+        aria-haspopup={launcher.accounts.length ? "menu" : "dialog"}
+        title={launcher.accounts.length ? "Switch Account" : "Sign In"}
+        onclick={showAccountMenu}
+      >
         <Icon name="person" />
         {launcher.account?.name ?? "Sign In"}
+        {#if launcher.accounts.length}
+          <svg class="chevron" width="8" height="8" viewBox="0 0 8 8" aria-hidden="true">
+            <path d="M1.5 3l2.5 2.5L6.5 3" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
+          </svg>
+        {/if}
       </button>
     </header>
 
@@ -136,6 +184,10 @@
     background: transparent;
     color: var(--text-secondary);
     font-weight: 500;
+  }
+
+  .chevron {
+    margin-left: -1px;
   }
 
   .account:hover {

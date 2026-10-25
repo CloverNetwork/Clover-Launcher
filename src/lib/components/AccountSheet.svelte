@@ -2,7 +2,6 @@
   import { openUrl } from "@tauri-apps/plugin-opener";
   import { api, errorText, type DeviceCode } from "$lib/api";
   import { launcher } from "$lib/launcher.svelte";
-  import BlockIcon from "./BlockIcon.svelte";
 
   let dialog: HTMLDialogElement | undefined = $state();
   let code = $state<DeviceCode | null>(null);
@@ -19,7 +18,8 @@
     e.preventDefault();
     error = null;
     try {
-      launcher.account = await api.signInOffline(offlineName);
+      launcher.setAccounts(await api.signInOffline(offlineName));
+      offlineName = "";
       launcher.accountOpen = false;
     } catch (err) {
       error = errorText(err);
@@ -42,8 +42,7 @@
     try {
       code = await api.beginSignIn();
       await openUrl(code.verificationUri);
-      const profile = await api.finishSignIn(code);
-      launcher.account = profile;
+      launcher.setAccounts(await api.finishSignIn(code));
       launcher.accountOpen = false;
     } catch (e) {
       code = null;
@@ -67,20 +66,7 @@
   aria-labelledby="account-title"
   onclose={() => (launcher.accountOpen = false)}
 >
-  {#if launcher.account}
-    <h2 id="account-title">Account</h2>
-    <div class="profile">
-      <BlockIcon seed={launcher.account.uuid} size={40} />
-      <div>
-        <strong>{launcher.account.name}</strong>
-        <p class="secondary">{launcher.account.offline ? "Offline account (development only)" : "Microsoft account"}</p>
-      </div>
-    </div>
-    <div class="actions">
-      <button class="button destructive" onclick={() => launcher.signOut()}>Sign Out</button>
-      <button class="button default" onclick={() => (launcher.accountOpen = false)}>Done</button>
-    </div>
-  {:else if code}
+  {#if code}
     <h2 id="account-title">Finish Signing In</h2>
     <p class="secondary">In the browser window that opened, enter this code:</p>
     <div class="code">
@@ -93,7 +79,7 @@
       <button class="button" onclick={() => (launcher.accountOpen = false)}>Cancel</button>
     </div>
   {:else}
-    <h2 id="account-title">Sign In to Play</h2>
+    <h2 id="account-title">{launcher.accounts.length ? "Add Account" : "Sign In to Play"}</h2>
     <p class="secondary">Use the Microsoft account that owns Minecraft: Java Edition. Your password goes only to Microsoft.</p>
     {#if error}
       <p class="error" role="alert">{error}</p>
@@ -133,12 +119,6 @@
     margin: 0;
   }
 
-  .profile {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-top: 12px;
-  }
 
   .code {
     display: flex;

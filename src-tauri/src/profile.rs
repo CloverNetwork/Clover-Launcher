@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use reqwest::Client;
 
-use crate::download::{self, Task};
+use crate::download::{self, Task, Verify};
 use crate::error::{Result, msg};
 use crate::manifest::{
     self, Argument, Artifact, AssetIndexRef, Library, LoggingClient, VersionJson, VersionManifest, rules_allow,
@@ -48,7 +48,8 @@ pub fn load(paths: &Paths, id: &str) -> Result<VersionJson> {
 }
 
 /// Loads `id` and its parents, downloading vanilla versions from Mojang as needed.
-pub async fn resolve(client: &Client, paths: &Paths, id: &str) -> Result<Resolved> {
+/// With `Verify::Existing`, profiles already on disk are used without going online.
+pub async fn resolve(client: &Client, paths: &Paths, id: &str, verify: Verify) -> Result<Resolved> {
     let mut manifest = None;
     let mut chain = Vec::new();
     let mut next = Some(id.to_string());
@@ -56,7 +57,7 @@ pub async fn resolve(client: &Client, paths: &Paths, id: &str) -> Result<Resolve
         if chain.len() == MAX_DEPTH {
             return Err(msg("This profile inherits from too many other profiles."));
         }
-        let json = load_or_fetch(client, paths, &mut manifest, &id).await?;
+        let json = load_or_fetch(client, paths, &mut manifest, &id, verify).await?;
         next = json.inherits_from.clone();
         chain.push(json);
     }
@@ -68,10 +69,16 @@ async fn load_or_fetch(
     paths: &Paths,
     manifest: &mut Option<VersionManifest>,
     id: &str,
+    verify: Verify,
 ) -> Result<VersionJson> {
     // Some loaders (Ornithe) name their parent "<version>-vanilla", following
     // launchers that keep a renamed copy of the vanilla profile.
     let candidates = [Some(id), id.strip_suffix("-vanilla")];
+    if verify == Verify::Existing {
+        if let Some(local) = candidates.into_iter().flatten().find(|c| json_path(paths, c).exists()) {
+            return load(paths, local);
+        }
+    }
     for candidate in candidates.into_iter().flatten() {
         if manifest.is_none() {
             *manifest = Some(manifest::fetch_manifest(client).await?);
@@ -79,7 +86,7 @@ async fn load_or_fetch(
         let mojang = manifest.as_ref().and_then(|m| m.versions.iter().find(|v| v.id == candidate));
         if let Some(entry) = mojang {
             let task = Task { url: entry.url.clone(), path: json_path(paths, candidate), sha1: Some(entry.sha1.clone()) };
-            download::fetch(client, task).await?;
+            download::fetch(client, task, verify).await?;
             return load(paths, candidate);
         }
         if json_path(paths, candidate).exists() {

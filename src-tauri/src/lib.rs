@@ -20,6 +20,7 @@ use tauri_plugin_opener::OpenerExt;
 
 use crate::error::{Result, msg};
 use crate::game::Running;
+use crate::download::Verify;
 use crate::install::AppReporter;
 use crate::instances::Instance;
 use crate::loaders::{LoaderSource, LoaderVersion};
@@ -106,15 +107,21 @@ fn delete_instance(state: State<'_, AppState>, running: State<'_, Running>, id: 
     instances::delete(&state.paths, &id)
 }
 
+/// Re-checks every file against its hash and replaces anything damaged or missing.
+/// Returns the instance and how many files were replaced.
 #[tauri::command]
-async fn install_instance(app: AppHandle, state: State<'_, AppState>, id: String) -> Result<Instance> {
+async fn verify_instance(app: AppHandle, state: State<'_, AppState>, running: State<'_, Running>, id: String) -> Result<(Instance, usize)> {
+    if running.is_running(&id) {
+        return Err(msg("Stop the game before verifying its files."));
+    }
     let mut instance = instances::get(&state.paths, &id)?;
     let settings = settings::load(&state.paths);
     let mut reporter = AppReporter::new(app, id);
-    install::install(&state.http, &state.paths, &settings, &instance, &mut reporter).await?;
+    let (resolved, downloaded) = install::install(&state.http, &state.paths, &settings, &instance, Verify::Full, &mut reporter).await?;
     instance.installed = true;
+    instance.profile_id = Some(resolved.id);
     instances::save(&state.paths, &instance)?;
-    Ok(instance)
+    Ok((instance, downloaded))
 }
 
 #[tauri::command]
@@ -128,10 +135,12 @@ async fn launch_instance(app: AppHandle, state: State<'_, AppState>, running: St
     // Always re-verify files; already-valid ones are skipped.
     let settings = settings::load(&state.paths);
     let mut reporter = AppReporter::new(app.clone(), id.clone());
-    let version = install::install(&state.http, &state.paths, &settings, &instance, &mut reporter).await?;
+    // Only missing files download; Verify Game Files re-hashes everything.
+    let (version, _) = install::install(&state.http, &state.paths, &settings, &instance, Verify::Existing, &mut reporter).await?;
     let command = launch::build_command(&state.paths, &instance, &version, &session, &settings)?;
     game::spawn(app, id, command, version.java_major)?;
     instance.installed = true;
+    instance.profile_id = Some(version.id);
     instance.last_played = Some(instances::now());
     instances::save(&state.paths, &instance)?;
     Ok(instance)
@@ -162,8 +171,27 @@ fn save_settings(state: State<'_, AppState>, settings: Settings) -> Result<()> {
 }
 
 #[tauri::command]
-fn get_account(state: State<'_, AppState>) -> Option<auth::Profile> {
-    auth::current(&state.paths)
+fn get_accounts(state: State<'_, AppState>) -> auth::Accounts {
+    auth::accounts(&state.paths)
+}
+
+/// Rebuilds the menu bar's account list after any account change.
+fn accounts_changed(app: &AppHandle, paths: &Paths) -> Result<auth::Accounts> {
+    let accounts = auth::accounts(paths);
+    app.set_menu(menu::build(app, &accounts)?)?;
+    Ok(accounts)
+}
+
+#[tauri::command]
+fn switch_account(app: AppHandle, state: State<'_, AppState>, uuid: String) -> Result<auth::Accounts> {
+    auth::switch(&state.paths, &uuid)?;
+    accounts_changed(&app, &state.paths)
+}
+
+#[tauri::command]
+fn remove_account(app: AppHandle, state: State<'_, AppState>, uuid: String) -> Result<auth::Accounts> {
+    auth::remove(&state.paths, &uuid)?;
+    accounts_changed(&app, &state.paths)
 }
 
 #[tauri::command]
@@ -172,18 +200,15 @@ async fn begin_sign_in(state: State<'_, AppState>) -> Result<auth::DeviceCode> {
 }
 
 #[tauri::command]
-async fn finish_sign_in(state: State<'_, AppState>, code: auth::DeviceCode) -> Result<auth::Profile> {
-    auth::finish(&state.http, &state.paths, &code.device_code, code.interval, code.expires_in).await
+async fn finish_sign_in(app: AppHandle, state: State<'_, AppState>, code: auth::DeviceCode) -> Result<auth::Accounts> {
+    auth::finish(&state.http, &state.paths, &code.device_code, code.interval, code.expires_in).await?;
+    accounts_changed(&app, &state.paths)
 }
 
 #[tauri::command]
-fn sign_in_offline(state: State<'_, AppState>, name: String) -> Result<auth::Profile> {
-    auth::sign_in_offline(&state.paths, &name)
-}
-
-#[tauri::command]
-fn sign_out(state: State<'_, AppState>) -> Result<()> {
-    auth::sign_out(&state.paths)
+fn sign_in_offline(app: AppHandle, state: State<'_, AppState>, name: String) -> Result<auth::Accounts> {
+    auth::sign_in_offline(&state.paths, &name)?;
+    accounts_changed(&app, &state.paths)
 }
 
 #[tauri::command]
@@ -201,8 +226,9 @@ pub fn run() {
             let http = Client::builder()
                 .user_agent(concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION")))
                 .build()?;
-            app.manage(AppState { paths: Paths::new(app.handle())?, http });
-            app.set_menu(menu::build(app.handle())?)?;
+            let paths = Paths::new(app.handle())?;
+            app.set_menu(menu::build(app.handle(), &auth::accounts(&paths))?)?;
+            app.manage(AppState { paths, http });
             app.on_menu_event(|app, event| menu::handle(app, event.id().as_ref()));
             Ok(())
         })
@@ -216,17 +242,18 @@ pub fn run() {
             create_instance,
             create_instance_from_profile,
             delete_instance,
-            install_instance,
+            verify_instance,
             launch_instance,
             stop_instance,
             show_instance_folder,
             get_settings,
             save_settings,
-            get_account,
+            get_accounts,
+            switch_account,
+            remove_account,
             begin_sign_in,
             finish_sign_in,
             sign_in_offline,
-            sign_out,
             open_settings,
         ])
         .run(tauri::generate_context!())

@@ -53,7 +53,12 @@ impl Paths {
         self.root.join("settings.json")
     }
 
-    pub fn account_file(&self) -> PathBuf {
+    pub fn accounts_file(&self) -> PathBuf {
+        self.root.join("accounts.json")
+    }
+
+    /// Before account switching there was a single account in this file.
+    pub fn legacy_account_file(&self) -> PathBuf {
         self.root.join("account.json")
     }
 }

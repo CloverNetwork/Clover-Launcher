@@ -17,6 +17,9 @@ pub struct Instance {
     /// The loader's version, or the profile ID for a custom profile.
     #[serde(default)]
     pub loader_version: Option<String>,
+    /// The launcher profile the last install resolved to, so launches can skip the network.
+    #[serde(default)]
+    pub profile_id: Option<String>,
     pub created_at: u64,
     pub last_played: Option<u64>,
     pub installed: bool,
@@ -70,6 +73,7 @@ pub fn create(paths: &Paths, name: &str, version: &str, loader: &str, loader_ver
         version: version.to_string(),
         loader: loader.to_string(),
         loader_version,
+        profile_id: None,
         created_at: now(),
         last_played: None,
         installed: false,

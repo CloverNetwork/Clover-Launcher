@@ -4,7 +4,7 @@ use reqwest::Client;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
-use crate::download::{self, Task};
+use crate::download::{self, Task, Verify};
 use crate::error::{Result, msg};
 use crate::instances::Instance;
 use crate::loaders;
@@ -76,36 +76,37 @@ pub fn client_jar_path(paths: &Paths, resolved: &Resolved) -> PathBuf {
 }
 
 /// Copies the vanilla client jar to the profile's own name when they differ.
-pub fn link_client_jar(paths: &Paths, resolved: &Resolved) -> Result<()> {
+/// `force` recopies it, for when Verify Game Files may have replaced the original.
+pub fn link_client_jar(paths: &Paths, resolved: &Resolved, force: bool) -> Result<()> {
     let target = client_jar_path(paths, resolved);
     let source = profile::jar_path(paths, &resolved.jar_id);
     let same_size = |a: &PathBuf, b: &PathBuf| Some(std::fs::metadata(a).ok()?.len() == std::fs::metadata(b).ok()?.len());
-    if target != source && same_size(&target, &source) != Some(true) {
+    if target != source && (force || same_size(&target, &source) != Some(true)) {
         std::fs::create_dir_all(target.parent().expect("jar has a parent"))?;
         std::fs::copy(source, target)?;
     }
     Ok(())
 }
 
-/// Prepares the instance's loader, then downloads everything its resolved profile needs:
-/// client jar, libraries, legacy natives, assets and log config.
+/// Prepares the instance's loader, then downloads whatever its resolved profile needs and
+/// isn't on disk yet: client jar, libraries, legacy natives, assets and log config.
+/// Returns the resolved profile and how many files were downloaded.
 pub async fn install(
     client: &Client,
     paths: &Paths,
     settings: &Settings,
     instance: &Instance,
+    verify: Verify,
     reporter: &mut impl Reporter,
-) -> Result<Resolved> {
-    let profile_id = loaders::ensure_profile(client, paths, settings, instance, reporter).await?;
-    reporter.stage("Checking game files…");
-    let resolved = profile::resolve(client, paths, &profile_id).await?;
+) -> Result<(Resolved, usize)> {
+    let profile_id = loaders::ensure_profile(client, paths, settings, instance, verify, reporter).await?;
+    reporter.stage(if verify == Verify::Full { "Verifying game files…" } else { "Checking game files…" });
+    let resolved = profile::resolve(client, paths, &profile_id, verify).await?;
 
     let index_path = paths.assets().join("indexes").join(format!("{}.json", resolved.asset_index.id));
-    download::fetch(
-        client,
-        Task { url: resolved.asset_index.url.clone(), path: index_path.clone(), sha1: Some(resolved.asset_index.sha1.clone()) },
-    )
-    .await?;
+    let index_task =
+        Task { url: resolved.asset_index.url.clone(), path: index_path.clone(), sha1: Some(resolved.asset_index.sha1.clone()) };
+    let mut downloaded = usize::from(download::fetch(client, index_task, verify).await?);
     let index: AssetIndex = serde_json::from_slice(&std::fs::read(index_path)?)?;
 
     let mut tasks = vec![Task {
@@ -148,7 +149,7 @@ pub async fn install(
         });
     }
 
-    download::run(client, tasks, |done, total| reporter.files(done, total)).await?;
-    link_client_jar(paths, &resolved)?;
-    Ok(resolved)
+    downloaded += download::run(client, tasks, verify, |done, total| reporter.files(done, total)).await?;
+    link_client_jar(paths, &resolved, verify == Verify::Full)?;
+    Ok((resolved, downloaded))
 }

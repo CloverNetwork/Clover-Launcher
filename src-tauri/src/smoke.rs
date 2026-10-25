@@ -16,7 +16,7 @@ use reqwest::Client;
 use tokio::io::{AsyncBufReadExt, BufReader};
 
 use crate::auth::{Profile, Session};
-use crate::download::{self, Task};
+use crate::download::{self, Task, Verify};
 use crate::install::{Reporter, link_client_jar};
 use crate::instances::Instance;
 use crate::paths::Paths;
@@ -45,6 +45,7 @@ fn instance(loader: &str, game: &str, loader_version: Option<String>) -> Instanc
         version: game.into(),
         loader: loader.into(),
         loader_version,
+        profile_id: None,
         created_at: 0,
         last_played: None,
         installed: false,
@@ -62,8 +63,8 @@ fn session() -> Session {
 /// Everything except assets, which the game can start without.
 async fn prepare(client: &Client, paths: &Paths, instance: &Instance) -> Resolved {
     let settings = Settings::default();
-    let id = loaders::ensure_profile(client, paths, &settings, instance, &mut Print).await.unwrap();
-    let resolved = profile::resolve(client, paths, &id).await.unwrap();
+    let id = loaders::ensure_profile(client, paths, &settings, instance, Verify::Existing, &mut Print).await.unwrap();
+    let resolved = profile::resolve(client, paths, &id, Verify::Existing).await.unwrap();
     let mut tasks = vec![Task {
         url: resolved.client.url.clone(),
         path: profile::jar_path(paths, &resolved.jar_id),
@@ -76,8 +77,8 @@ async fn prepare(client: &Client, paths: &Paths, instance: &Instance) -> Resolve
             }
         }
     }
-    download::run(client, tasks, |_, _| {}).await.unwrap();
-    link_client_jar(paths, &resolved).unwrap();
+    download::run(client, tasks, Verify::Existing, |_, _| {}).await.unwrap();
+    link_client_jar(paths, &resolved, false).unwrap();
     resolved
 }
 
@@ -128,7 +129,7 @@ async fn boots(loader: &str, game: &str, loader_marker: &str) {
     let paths = Paths::at(root());
     let instance = instance(loader, game, Some(latest(&client, loader, game).await));
     // The full install, assets and log config included, exactly as the app does it.
-    let resolved = crate::install::install(&client, &paths, &Settings::default(), &instance, &mut Print).await.unwrap();
+    let (resolved, _) = crate::install::install(&client, &paths, &Settings::default(), &instance, Verify::Existing, &mut Print).await.unwrap();
     let mut command = launch::build_command(&paths, &instance, &resolved, &session(), &Settings::default()).unwrap();
     command.stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped()).kill_on_drop(true);
     let mut child = command.spawn().unwrap();
@@ -208,4 +209,31 @@ async fn boots_ornithe() {
 #[ignore]
 async fn boots_babric() {
     boots("babric", "b1.7.3", "with Fabric Loader").await;
+}
+
+/// A second launch must download nothing and finish quickly, and Verify Game Files must
+/// find and replace a damaged file.
+#[tokio::test]
+#[ignore]
+async fn relaunch_downloads_nothing() {
+    let client = Client::new();
+    let paths = Paths::at(root());
+    let settings = Settings::default();
+    let mut instance = instance("fabric", "1.21.4", Some(latest(&client, "fabric", "1.21.4").await));
+
+    let (resolved, first) = crate::install::install(&client, &paths, &settings, &instance, Verify::Existing, &mut Print).await.unwrap();
+    println!("  first install: {first} files");
+    instance.profile_id = Some(resolved.id.clone());
+
+    let started = std::time::Instant::now();
+    let (_, second) = crate::install::install(&client, &paths, &settings, &instance, Verify::Existing, &mut Print).await.unwrap();
+    println!("  second launch: {second} files in {:?}", started.elapsed());
+    assert_eq!(second, 0, "a second launch downloaded files");
+    assert!(started.elapsed() < Duration::from_secs(3), "a second launch took {:?}", started.elapsed());
+
+    let client_jar = profile::jar_path(&paths, &resolved.jar_id);
+    std::fs::write(&client_jar, b"damaged").unwrap();
+    let (_, repaired) = crate::install::install(&client, &paths, &settings, &instance, Verify::Full, &mut Print).await.unwrap();
+    println!("  verify: replaced {repaired} files");
+    assert_eq!(repaired, 1, "Verify Game Files should replace exactly the damaged jar");
 }

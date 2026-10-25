@@ -16,23 +16,47 @@ pub struct Task {
     pub sha1: Option<String>,
 }
 
-/// Downloads every task in parallel, skipping files that already verify.
-pub async fn run(client: &Client, tasks: Vec<Task>, mut on_progress: impl FnMut(usize, usize)) -> Result<()> {
-    let total = tasks.len();
+/// How much to trust files already on disk.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Verify {
+    /// A file that exists is complete: downloads land under a temporary name and are
+    /// checked before they're moved into place. Used on every launch.
+    Existing,
+    /// Re-hash every file and replace any that don't match. Used by Verify Game Files.
+    Full,
+}
+
+/// Downloads the tasks whose files are missing (or, with `Verify::Full`, don't match their
+/// hash). Progress counts only real downloads. Returns how many files were downloaded.
+pub async fn run(client: &Client, tasks: Vec<Task>, verify: Verify, mut on_progress: impl FnMut(usize, usize)) -> Result<usize> {
+    let needed: Vec<Task> = stream::iter(tasks)
+        .map(|task| async move { (!is_present(&task, verify).await).then_some(task) })
+        .buffer_unordered(CONCURRENCY * 4)
+        .filter_map(|task| async move { task })
+        .collect()
+        .await;
+
+    let total = needed.len();
     let mut done = 0;
-    let mut results = stream::iter(tasks.into_iter().map(|t| fetch(client, t))).buffer_unordered(CONCURRENCY);
+    let mut results = stream::iter(needed.into_iter().map(|t| download(client, t))).buffer_unordered(CONCURRENCY);
     while let Some(result) = results.next().await {
         result?;
         done += 1;
         on_progress(done, total);
     }
-    Ok(())
+    Ok(total)
 }
 
-pub async fn fetch(client: &Client, task: Task) -> Result<()> {
-    if is_valid(&task.path, task.sha1.as_deref()).await {
-        return Ok(());
+/// Downloads one file unless it's already present. Returns whether it downloaded.
+pub async fn fetch(client: &Client, task: Task, verify: Verify) -> Result<bool> {
+    if is_present(&task, verify).await {
+        return Ok(false);
     }
+    download(client, task).await?;
+    Ok(true)
+}
+
+async fn download(client: &Client, task: Task) -> Result<()> {
     if let Some(parent) = task.path.parent() {
         tokio::fs::create_dir_all(parent).await?;
     }
@@ -43,7 +67,8 @@ pub async fn fetch(client: &Client, task: Task) -> Result<()> {
         }
     }
     // Write to a temp file first so a cancelled download never looks complete.
-    let partial = task.path.with_extension("part");
+    let mut partial = task.path.clone().into_os_string();
+    partial.push(".part");
     tokio::fs::write(&partial, &bytes).await?;
     tokio::fs::rename(&partial, &task.path).await?;
     Ok(())
@@ -64,12 +89,15 @@ async fn get_with_retry(client: &Client, url: &str) -> Result<bytes::Bytes> {
     }
 }
 
-async fn is_valid(path: &Path, sha1: Option<&str>) -> bool {
-    match (tokio::fs::read(path).await, sha1) {
-        (Ok(bytes), Some(expected)) => sha1_hex(&bytes) == expected,
-        (Ok(_), None) => true,
-        (Err(_), _) => false,
+async fn is_present(task: &Task, verify: Verify) -> bool {
+    match (verify, task.sha1.as_deref()) {
+        (Verify::Full, Some(expected)) => is_valid(&task.path, expected).await,
+        _ => tokio::fs::try_exists(&task.path).await.unwrap_or(false),
     }
+}
+
+async fn is_valid(path: &Path, sha1: &str) -> bool {
+    tokio::fs::read(path).await.is_ok_and(|bytes| sha1_hex(&bytes) == sha1)
 }
 
 fn sha1_hex(bytes: &[u8]) -> String {

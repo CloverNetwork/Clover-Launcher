@@ -9,17 +9,20 @@
   const activity = $derived(launcher.activity[instance.id]);
   const progress = $derived(launcher.progress[instance.id]);
   const error = $derived(launcher.error?.instanceId === instance.id ? launcher.error.message : null);
+  const notice = $derived(launcher.notice?.instanceId === instance.id ? launcher.notice.message : null);
+  const busy = $derived(activity === "launching" || activity === "verifying");
 
   const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
   const formatDate = (seconds: number | null) => (seconds ? dateFormat.format(seconds * 1000) : "Never");
 
   const status = $derived.by(() => {
     if (activity === "running") return "Playing";
-    if (activity === "launching" && progress?.stage) return progress.stage;
-    if (activity === "launching" && progress && progress.done < progress.total)
-      return `Downloading files: ${progress.done.toLocaleString()} of ${progress.total.toLocaleString()}`;
+    if (busy && progress && progress.total > 0 && progress.done < progress.total)
+      return `Downloading ${progress.total.toLocaleString()} files: ${progress.done.toLocaleString()} done`;
+    if (busy && progress?.stage) return progress.stage;
     if (activity === "launching") return "Starting Minecraft…";
-    return null;
+    if (activity === "verifying") return "Verifying game files…";
+    return notice;
   });
 </script>
 
@@ -43,7 +46,7 @@
         <span class="status secondary" role="status" aria-live="polite">{status ?? ""}</span>
       </div>
 
-      {#if activity === "launching" && progress && progress.total > 0}
+      {#if busy && progress && progress.total > 0}
         <progress max={progress.total} value={progress.done} aria-label="Download progress"></progress>
       {/if}
     </div>

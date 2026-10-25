@@ -102,12 +102,85 @@ pub async fn finish(client: &Client, paths: &Paths, device_code: &str, interval:
     };
     let session = minecraft_session(client, &token.access_token).await?;
     keyring::Entry::new(KEYRING_SERVICE, &session.profile.uuid)?.set_password(&token.refresh_token)?;
-    std::fs::write(paths.account_file(), serde_json::to_vec(&session.profile)?)?;
+    add(paths, session.profile.clone())?;
     Ok(session.profile)
 }
 
+/// Every signed-in account, and which one plays. Tokens live in the keychain, not here.
+#[derive(Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Accounts {
+    pub active: Option<String>,
+    pub accounts: Vec<Profile>,
+}
+
+impl Accounts {
+    pub fn current(&self) -> Option<&Profile> {
+        self.accounts.iter().find(|a| Some(&a.uuid) == self.active.as_ref())
+    }
+}
+
+pub fn accounts(paths: &Paths) -> Accounts {
+    let read = |path| serde_json::from_slice::<serde_json::Value>(&std::fs::read(path).ok()?).ok();
+    let mut accounts = match read(paths.accounts_file()) {
+        Some(json) => serde_json::from_value(json).unwrap_or_default(),
+        // Migrate the single account from before switching existed.
+        None => match read(paths.legacy_account_file()).and_then(|j| serde_json::from_value::<Profile>(j).ok()) {
+            Some(profile) => Accounts { active: Some(profile.uuid.clone()), accounts: vec![profile] },
+            None => Accounts::default(),
+        },
+    };
+    // Release builds can't use offline accounts, so they don't list them.
+    accounts.accounts.retain(|a| OFFLINE_ALLOWED || !a.offline);
+    if accounts.current().is_none() {
+        accounts.active = accounts.accounts.first().map(|a| a.uuid.clone());
+    }
+    accounts
+}
+
+fn save(paths: &Paths, accounts: &Accounts) -> Result<()> {
+    std::fs::write(paths.accounts_file(), serde_json::to_vec_pretty(accounts)?)?;
+    let _ = std::fs::remove_file(paths.legacy_account_file());
+    Ok(())
+}
+
+/// Adds an account, or updates it after signing in again, and makes it the active one.
+fn add(paths: &Paths, profile: Profile) -> Result<()> {
+    let mut all = accounts(paths);
+    all.active = Some(profile.uuid.clone());
+    match all.accounts.iter_mut().find(|a| a.uuid == profile.uuid) {
+        Some(existing) => *existing = profile,
+        None => all.accounts.push(profile),
+    }
+    save(paths, &all)
+}
+
+pub fn switch(paths: &Paths, uuid: &str) -> Result<()> {
+    let mut all = accounts(paths);
+    if !all.accounts.iter().any(|a| a.uuid == uuid) {
+        return Err(msg("That account isn't signed in any more."));
+    }
+    all.active = Some(uuid.into());
+    save(paths, &all)
+}
+
+/// Signs an account out: forgets its refresh token and removes it from the list.
+pub fn remove(paths: &Paths, uuid: &str) -> Result<()> {
+    let mut all = accounts(paths);
+    if let Some(profile) = all.accounts.iter().find(|a| a.uuid == uuid) {
+        if !profile.offline {
+            let _ = keyring::Entry::new(KEYRING_SERVICE, uuid)?.delete_credential();
+        }
+    }
+    all.accounts.retain(|a| a.uuid != uuid);
+    if all.active.as_deref() == Some(uuid) {
+        all.active = all.accounts.first().map(|a| a.uuid.clone());
+    }
+    save(paths, &all)
+}
+
 pub fn current(paths: &Paths) -> Option<Profile> {
-    serde_json::from_slice(&std::fs::read(paths.account_file()).ok()?).ok()
+    accounts(paths).current().cloned()
 }
 
 /// Exchanges the stored refresh token for a fresh Minecraft session.
@@ -156,7 +229,7 @@ pub fn sign_in_offline(paths: &Paths, name: &str) -> Result<Profile> {
         return Err(msg("Use 3 to 16 letters, numbers or underscores."));
     }
     let profile = Profile { uuid: offline_uuid(name), name: name.into(), offline: true };
-    std::fs::write(paths.account_file(), serde_json::to_vec(&profile)?)?;
+    add(paths, profile.clone())?;
     Ok(profile)
 }
 
@@ -166,14 +239,6 @@ fn offline_uuid(name: &str) -> String {
     use md5::{Digest, Md5};
     let hash: [u8; 16] = Md5::digest(format!("OfflinePlayer:{name}")).into();
     uuid::Builder::from_md5_bytes(hash).into_uuid().simple().to_string()
-}
-
-pub fn sign_out(paths: &Paths) -> Result<()> {
-    if let Some(profile) = current(paths) {
-        let _ = keyring::Entry::new(KEYRING_SERVICE, &profile.uuid)?.delete_credential();
-    }
-    let _ = std::fs::remove_file(paths.account_file());
-    Ok(())
 }
 
 #[derive(Deserialize)]
@@ -292,6 +357,31 @@ mod tests {
         let result = super::sign_in_offline(&paths, "Tester");
         assert_eq!(result.is_ok(), cfg!(debug_assertions));
         assert!(super::sign_in_offline(&paths, "no spaces").is_err());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    #[cfg(debug_assertions)]
+    fn switches_between_accounts() {
+        let dir = std::env::temp_dir().join(format!("clover-accounts-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let paths = crate::paths::Paths::at(dir.clone());
+        // An account saved before switching existed is migrated.
+        let legacy = super::Profile { uuid: "a".repeat(32), name: "Legacy".into(), offline: true };
+        std::fs::write(paths.legacy_account_file(), serde_json::to_vec(&legacy).unwrap()).unwrap();
+        assert_eq!(super::current(&paths).unwrap().name, "Legacy");
+
+        let alex = super::sign_in_offline(&paths, "Alex").unwrap();
+        assert_eq!(super::current(&paths).unwrap().name, "Alex");
+        assert_eq!(super::accounts(&paths).accounts.len(), 2);
+        assert!(!paths.legacy_account_file().exists());
+
+        super::switch(&paths, &legacy.uuid).unwrap();
+        assert_eq!(super::current(&paths).unwrap().name, "Legacy");
+        super::remove(&paths, &legacy.uuid).unwrap();
+        assert_eq!(super::current(&paths).unwrap().uuid, alex.uuid);
+        super::remove(&paths, &alex.uuid).unwrap();
+        assert!(super::current(&paths).is_none());
         std::fs::remove_dir_all(dir).unwrap();
     }
 }

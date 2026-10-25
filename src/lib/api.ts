@@ -26,6 +26,7 @@ export type LoaderSource = {
 export type LoaderVersion = { version: string; label: string; stable: boolean };
 export type Settings = { javaPath: string; memoryMb: number; loaderSources: LoaderSource[] };
 export type Profile = { uuid: string; name: string; offline: boolean };
+export type Accounts = { active: string | null; accounts: Profile[] };
 export type DeviceCode = {
   userCode: string;
   deviceCode: string;
@@ -52,18 +53,20 @@ export const api = {
   createInstanceFromProfile: (name: string, path: string) =>
     invoke<Instance>("create_instance_from_profile", { name, path }),
   deleteInstance: (id: string) => invoke<void>("delete_instance", { id }),
-  installInstance: (id: string) => invoke<Instance>("install_instance", { id }),
+  /** Re-hashes every file and replaces damaged ones. Resolves to the instance and how many files were replaced. */
+  verifyInstance: (id: string) => invoke<[Instance, number]>("verify_instance", { id }),
   launchInstance: (id: string) => invoke<Instance>("launch_instance", { id }),
   stopInstance: (id: string) => invoke<void>("stop_instance", { id }),
   showInstanceFolder: (id: string) => invoke<void>("show_instance_folder", { id }),
   getSettings: () => invoke<Settings>("get_settings"),
   saveSettings: (settings: Settings) => invoke<void>("save_settings", { settings }),
-  getAccount: () => invoke<Profile | null>("get_account"),
+  getAccounts: () => invoke<Accounts>("get_accounts"),
+  switchAccount: (uuid: string) => invoke<Accounts>("switch_account", { uuid }),
+  removeAccount: (uuid: string) => invoke<Accounts>("remove_account", { uuid }),
   beginSignIn: () => invoke<DeviceCode>("begin_sign_in"),
-  finishSignIn: (code: DeviceCode) => invoke<Profile>("finish_sign_in", { code }),
+  finishSignIn: (code: DeviceCode) => invoke<Accounts>("finish_sign_in", { code }),
   /** Development builds only; release builds refuse it. */
-  signInOffline: (name: string) => invoke<Profile>("sign_in_offline", { name }),
-  signOut: () => invoke<void>("sign_out"),
+  signInOffline: (name: string) => invoke<Accounts>("sign_in_offline", { name }),
   openSettings: () => invoke<void>("open_settings"),
 };
 

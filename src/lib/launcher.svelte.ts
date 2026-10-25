@@ -1,20 +1,24 @@
 import { ask } from "@tauri-apps/plugin-dialog";
-import { api, errorText, events, type Instance, type LoaderSource, type Profile } from "./api";
+import { api, errorText, events, type Accounts, type Instance, type LoaderSource, type Profile } from "./api";
 
 const MAX_LOG_LINES = 2000;
 
-type Activity = "installing" | "launching" | "running";
+type Activity = "verifying" | "launching" | "running";
 
 class Launcher {
   instances = $state<Instance[]>([]);
   selectedId = $state<string | null>(null);
-  account = $state<Profile | null>(null);
+  accounts = $state<Profile[]>([]);
+  activeAccountId = $state<string | null>(null);
+  account = $derived(this.accounts.find((a) => a.uuid === this.activeAccountId) ?? null);
   activity = $state<Record<string, Activity>>({});
   progress = $state<Record<string, { stage: string | null; done: number; total: number }>>({});
   loaders = $state<LoaderSource[]>([]);
   logs = $state<Record<string, string[]>>({});
   /** Inline error for the selected instance, shown in the detail view rather than an alert. */
   error = $state<{ instanceId: string; message: string } | null>(null);
+  /** A short confirmation shown in the status line, such as the result of verifying files. */
+  notice = $state<{ instanceId: string; message: string } | null>(null);
 
   sidebarVisible = $state(true);
   logVisible = $state(false);
@@ -42,7 +46,7 @@ class Launcher {
         }
       }),
     ]);
-    this.account = await api.getAccount();
+    this.setAccounts(await api.getAccounts());
     await Promise.all([this.reload(), this.reloadLoaders()]);
   }
 
@@ -90,6 +94,7 @@ class Launcher {
       return;
     }
     this.error = null;
+    this.notice = null;
     this.activity[id] = "launching";
     this.logs[id] = [];
     try {
@@ -127,9 +132,39 @@ class Launcher {
     if (id) await api.showInstanceFolder(id);
   }
 
-  async signOut() {
-    await api.signOut();
-    this.account = null;
+  /** Re-checks every file, replacing damaged ones. */
+  async verify(id = this.selectedId) {
+    if (!id || this.activity[id]) return;
+    this.error = null;
+    this.notice = null;
+    this.activity[id] = "verifying";
+    try {
+      const [instance, replaced] = await api.verifyInstance(id);
+      this.replace(instance);
+      const message = replaced
+        ? `Replaced ${replaced.toLocaleString()} missing or damaged ${replaced === 1 ? "file" : "files"}.`
+        : "All game files are intact.";
+      this.notice = { instanceId: id, message };
+    } catch (e) {
+      this.error = { instanceId: id, message: errorText(e) };
+    } finally {
+      delete this.activity[id];
+      delete this.progress[id];
+    }
+  }
+
+  setAccounts(accounts: Accounts) {
+    this.accounts = accounts.accounts;
+    this.activeAccountId = accounts.active;
+  }
+
+  async switchAccount(uuid: string) {
+    this.setAccounts(await api.switchAccount(uuid));
+  }
+
+  /** Signs out the active account; the next one, if any, becomes active. */
+  async signOut(uuid = this.activeAccountId) {
+    if (uuid) this.setAccounts(await api.removeAccount(uuid));
   }
 }
 

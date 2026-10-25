@@ -27,6 +27,7 @@
           : { id: "play", text: "Play", enabled: !launcher.activity[id], action: () => launcher.play(id) },
         { item: "Separator" },
         { id: "show", text: "Show in Finder", action: () => launcher.showFolder(id) },
+        { id: "verify", text: "Verify Game Files", enabled: !launcher.activity[id], action: () => launcher.verify(id) },
         { item: "Separator" },
         { id: "delete", text: "Delete Instance…", enabled: !running, action: () => launcher.remove(id) },
       ],

@@ -1,9 +1,15 @@
 //! The menu bar. Every command in the window is also reachable here.
 
-use tauri::menu::{AboutMetadata, Menu, MenuItem, SubmenuBuilder};
+use tauri::menu::{AboutMetadata, CheckMenuItem, Menu, MenuItem, SubmenuBuilder};
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder, Wry};
 
-pub fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
+use crate::auth::Accounts;
+
+/// Account item IDs are `account:<uuid>`; the window switches to that account.
+pub const ACCOUNT_PREFIX: &str = "account:";
+
+/// Rebuilt whenever accounts change, so Game › Account always lists them.
+pub fn build(app: &AppHandle, accounts: &Accounts) -> tauri::Result<Menu<Wry>> {
     let item = |id: &str, label: &str, accel: Option<&str>| MenuItem::with_id(app, id, label, true, accel);
 
     let app_menu = SubmenuBuilder::new(app, "Clover Launcher")
@@ -35,11 +41,32 @@ pub fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
         .separator()
         .fullscreen()
         .build()?;
+    let mut account = SubmenuBuilder::new(app, "Account");
+    for profile in &accounts.accounts {
+        let label = if profile.offline { format!("{} (Offline)", profile.name) } else { profile.name.clone() };
+        let active = accounts.active.as_ref() == Some(&profile.uuid);
+        let id = format!("{ACCOUNT_PREFIX}{}", profile.uuid);
+        account = account.item(&CheckMenuItem::with_id(app, id, label, true, active, None::<&str>)?);
+    }
+    if !accounts.accounts.is_empty() {
+        account = account.separator();
+    }
+    let sign_out_label = match accounts.current() {
+        Some(profile) => format!("Sign Out {}", profile.name),
+        None => "Sign Out".into(),
+    };
+    let account = account
+        .item(&item("add_account", "Add Account…", None)?)
+        .item(&MenuItem::with_id(app, "sign_out", sign_out_label, accounts.current().is_some(), None::<&str>)?)
+        .build()?;
+
     let game = SubmenuBuilder::new(app, "Game")
         .item(&item("play", "Play", Some("CmdOrCtrl+Enter"))?)
         .item(&item("stop", "Stop", Some("CmdOrCtrl+."))?)
         .separator()
-        .item(&item("account", "Account…", None)?)
+        .item(&item("verify_files", "Verify Game Files", None)?)
+        .separator()
+        .item(&account)
         .build()?;
     let window = SubmenuBuilder::new(app, "Window").minimize().maximize().build()?;
 

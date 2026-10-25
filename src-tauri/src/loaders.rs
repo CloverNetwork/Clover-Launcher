@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 
-use crate::download::{self, Task};
+use crate::download::{self, Task, Verify};
 use crate::error::{Result, msg};
 use crate::install::Reporter;
 use crate::instances::Instance;
@@ -225,8 +225,15 @@ pub async fn ensure_profile(
     paths: &Paths,
     settings: &Settings,
     instance: &Instance,
+    verify: Verify,
     reporter: &mut impl Reporter,
 ) -> Result<String> {
+    // Reuse the profile from the last install unless the person asked to verify everything.
+    if let Some(id) = &instance.profile_id {
+        if verify == Verify::Existing && profile::json_path(paths, id).exists() {
+            return Ok(id.clone());
+        }
+    }
     let loader_version = || instance.loader_version.clone().ok_or_else(|| msg("Choose a mod loader version for this instance."));
     match instance.loader.as_str() {
         VANILLA => Ok(instance.version.clone()),
@@ -241,11 +248,11 @@ pub async fn ensure_profile(
                 }
                 SourceKind::Forge => {
                     let url = format!("https://maven.minecraftforge.net/net/minecraftforge/forge/{version}/forge-{version}-installer.jar");
-                    run_installer(client, paths, settings, &url, reporter).await
+                    run_installer(client, paths, settings, &url, verify, reporter).await
                 }
                 SourceKind::NeoForge => {
                     let url = format!("https://maven.neoforged.net/releases/net/neoforged/neoforge/{version}/neoforge-{version}-installer.jar");
-                    run_installer(client, paths, settings, &url, reporter).await
+                    run_installer(client, paths, settings, &url, verify, reporter).await
                 }
             }
         }
@@ -284,14 +291,16 @@ async fn run_installer(
     paths: &Paths,
     settings: &Settings,
     url: &str,
+    verify: Verify,
     reporter: &mut impl Reporter,
 ) -> Result<String> {
     let file_name = url.rsplit('/').next().unwrap_or("installer.jar");
     let installer = paths.root.join("installers").join(file_name);
-    download::fetch(client, Task { url: url.into(), path: installer.clone(), sha1: None }).await?;
+    download::fetch(client, Task { url: url.into(), path: installer.clone(), sha1: None }, Verify::Existing).await?;
 
     let id = installer_profile_id(&installer)?;
-    if profile::json_path(paths, &id).exists() {
+    // Verifying reruns the installer, which regenerates its patched files.
+    if verify == Verify::Existing && profile::json_path(paths, &id).exists() {
         return Ok(id);
     }
 
