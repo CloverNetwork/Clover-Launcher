@@ -1,9 +1,9 @@
+//! Running the game: the process, its output and stopping it.
+
 use std::collections::{HashMap, VecDeque};
 use std::process::Stdio;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
-use serde::Serialize;
-use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
 use tokio::process::Command;
 use tokio::sync::oneshot;
@@ -20,52 +20,20 @@ impl GameLogs {
     pub fn lines(&self, instance_id: &str) -> Vec<String> {
         self.0.lock().unwrap().get(instance_id).map(|l| l.iter().cloned().collect()).unwrap_or_default()
     }
-}
 
-/// Records a line of game or installer output and sends it to every window.
-pub fn emit_log(app: &AppHandle, instance_id: &str, line: String) {
-    {
-        let logs = app.state::<GameLogs>();
-        let mut logs = logs.0.lock().unwrap();
+    /// Keeps a line, dropping the oldest once there are too many.
+    pub fn push(&self, instance_id: &str, line: String) {
+        let mut logs = self.0.lock().unwrap();
         let lines = logs.entry(instance_id.to_string()).or_default();
         if lines.len() == MAX_LOG_LINES {
             lines.pop_front();
         }
-        lines.push_back(line.clone());
+        lines.push_back(line);
     }
-    let _ = app.emit("game-log", LogLine { instance_id: instance_id.to_string(), line });
-}
 
-/// Starts a fresh log for a new launch, in every window.
-pub fn clear_log(app: &AppHandle, instance_id: &str) {
-    app.state::<GameLogs>().0.lock().unwrap().remove(instance_id);
-    let _ = app.emit("game-log-cleared", instance_id);
-}
-
-/// Opens an instance's log in its own window, or brings it forward if it's open.
-pub fn open_log_window(app: &AppHandle, instance_id: &str, name: &str) -> tauri::Result<()> {
-    let label = format!("log-{instance_id}");
-    if let Some(window) = app.get_webview_window(&label) {
-        return window.set_focus();
+    pub fn clear(&self, instance_id: &str) {
+        self.0.lock().unwrap().remove(instance_id);
     }
-    WebviewWindowBuilder::new(app, label, WebviewUrl::App(format!("log/{instance_id}").into()))
-        .title(format!("{name} — Game Log"))
-        .inner_size(760.0, 480.0)
-        .min_inner_size(420.0, 240.0)
-        .build()?;
-    Ok(())
-}
-
-/// Moves a log window's contents back under the instance page in the main window.
-pub fn pop_in_log_window(app: &AppHandle, instance_id: &str) -> tauri::Result<()> {
-    app.emit_to("main", "log-popped-in", instance_id)?;
-    if let Some(main) = app.get_webview_window("main") {
-        main.set_focus()?;
-    }
-    if let Some(window) = app.get_webview_window(&format!("log-{instance_id}")) {
-        window.close()?;
-    }
-    Ok(())
 }
 
 /// Running games, keyed by instance ID. Sending on the channel stops the game.
@@ -77,50 +45,52 @@ impl Running {
         self.0.lock().unwrap().contains_key(id)
     }
 
+    /// Registers a game before it starts, so it counts as running straight away.
+    /// Returns what tells `spawn` to stop it.
+    pub fn start(&self, id: &str) -> oneshot::Receiver<()> {
+        let (stop, stopped) = oneshot::channel();
+        self.0.lock().unwrap().insert(id.to_string(), stop);
+        stopped
+    }
+
     pub fn stop(&self, id: &str) {
         if let Some(stop) = self.0.lock().unwrap().remove(id) {
             let _ = stop.send(());
         }
     }
+
+    pub fn finished(&self, id: &str) {
+        self.0.lock().unwrap().remove(id);
+    }
 }
 
-#[derive(Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct LogLine {
-    instance_id: String,
-    line: String,
-}
-
-#[derive(Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct GameExit {
-    instance_id: String,
-    code: Option<i32>,
-}
-
-pub fn spawn(app: AppHandle, instance_id: String, mut command: Command) -> Result<()> {
+/// Starts the game. Output goes to `on_line` as it's printed, with Mojang's log4j XML
+/// turned into plain lines. `on_exit` runs once with the exit code, or `None` when the game
+/// was stopped through `stop`.
+pub fn spawn(
+    mut command: Command,
+    stop: oneshot::Receiver<()>,
+    on_line: impl Fn(String) + Send + Sync + 'static,
+    on_exit: impl FnOnce(Option<i32>) + Send + 'static,
+) -> Result<()> {
     command.stdout(Stdio::piped()).stderr(Stdio::piped()).kill_on_drop(true);
     let mut child = command.spawn().map_err(java_start_error)?;
+    let on_line = Arc::new(on_line);
     if let Some(out) = child.stdout.take() {
-        pipe(app.clone(), instance_id.clone(), out);
+        pipe(out, on_line.clone());
     }
     if let Some(err) = child.stderr.take() {
-        pipe(app.clone(), instance_id.clone(), err);
+        pipe(err, on_line);
     }
-
-    let (stop_tx, stop_rx) = oneshot::channel();
-    app.state::<Running>().0.lock().unwrap().insert(instance_id.clone(), stop_tx);
-
-    tauri::async_runtime::spawn(async move {
+    tokio::spawn(async move {
         let code = tokio::select! {
             status = child.wait() => status.ok().and_then(|s| s.code()),
-            _ = stop_rx => {
+            _ = stop => {
                 let _ = child.kill().await;
                 None
             }
         };
-        app.state::<Running>().0.lock().unwrap().remove(&instance_id);
-        let _ = app.emit("game-exit", GameExit { instance_id, code });
+        on_exit(code);
     });
     Ok(())
 }
@@ -136,13 +106,13 @@ pub fn java_start_error(e: std::io::Error) -> crate::error::Error {
     }
 }
 
-fn pipe(app: AppHandle, instance_id: String, stream: impl AsyncRead + Unpin + Send + 'static) {
-    tauri::async_runtime::spawn(async move {
+fn pipe(stream: impl AsyncRead + Unpin + Send + 'static, on_line: Arc<impl Fn(String) + Send + Sync + 'static>) {
+    tokio::spawn(async move {
         let mut lines = BufReader::new(stream).lines();
         let mut log4j = Log4jLines::default();
         while let Ok(Some(line)) = lines.next_line().await {
             if let Some(line) = log4j.push(&line) {
-                emit_log(&app, &instance_id, line);
+                on_line(line);
             }
         }
     });
@@ -216,7 +186,44 @@ impl Log4jLines {
 
 #[cfg(test)]
 mod tests {
-    use super::Log4jLines;
+    use super::{Log4jLines, Running, spawn};
+    use std::sync::{Arc, Mutex};
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn runs_and_stops_a_process() {
+        let lines = Arc::new(Mutex::new(Vec::new()));
+        let running = Running::default();
+
+        // A process that prints plain and log4j lines, then exits with code 3.
+        let mut command = tokio::process::Command::new("sh");
+        command.arg("-c").arg(
+            r#"echo plain; echo '<log4j:Event logger="x" timestamp="1" level="INFO" thread="main">'; echo '<log4j:Message><![CDATA[hello]]></log4j:Message>'; echo '</log4j:Event>'; exit 3"#,
+        );
+        let (exit_tx, exit_rx) = tokio::sync::oneshot::channel();
+        let seen = lines.clone();
+        spawn(command, running.start("a"), move |l| seen.lock().unwrap().push(l), move |code| {
+            let _ = exit_tx.send(code);
+        })
+        .unwrap();
+        assert!(running.is_running("a"));
+        assert_eq!(exit_rx.await.unwrap(), Some(3));
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        assert_eq!(*lines.lock().unwrap(), ["plain", "[main/INFO] hello"]);
+
+        // A process that would run for a minute stops when asked.
+        let mut command = tokio::process::Command::new("sleep");
+        command.arg("60");
+        let (exit_tx, exit_rx) = tokio::sync::oneshot::channel();
+        spawn(command, running.start("b"), |_| {}, move |code| {
+            let _ = exit_tx.send(code);
+        })
+        .unwrap();
+        running.stop("b");
+        let code = tokio::time::timeout(std::time::Duration::from_secs(5), exit_rx).await.expect("stopped in time").unwrap();
+        assert_eq!(code, None);
+        assert!(!running.is_running("b"));
+    }
 
     #[test]
     fn formats_log4j_events() {

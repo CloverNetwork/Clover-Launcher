@@ -1,37 +1,27 @@
-mod auth;
-mod download;
-mod error;
-mod game;
-mod install;
-mod instances;
-mod java;
-mod launch;
-mod loaders;
-mod manifest;
-mod mclogs;
-mod modpacks;
-mod mods;
-mod menu;
-mod paths;
-mod profile;
-mod settings;
-mod skins;
-#[cfg(test)]
-mod smoke;
+//! The Tauri front end: commands the windows call, built on clover-core.
 
+mod events;
+mod menu;
+
+use clover_core::download::Verify;
+use clover_core::error::{Result, msg};
+use clover_core::game::{self, GameLogs, Running};
+use clover_core::instances::{self, Instance};
+use clover_core::loaders::{self, LoaderSource, LoaderVersion};
+use clover_core::manifest::{self, VersionEntry};
+use clover_core::paths::Paths;
+use clover_core::settings::{self, Settings};
+use clover_core::{auth, install, launch, mclogs, modpacks, mods, profile, skins};
 use reqwest::Client;
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_opener::OpenerExt;
 
-use crate::error::{Result, msg};
-use crate::game::{GameLogs, Running};
-use crate::download::Verify;
-use crate::install::{AppReporter, ImportReporter};
-use crate::instances::Instance;
-use crate::loaders::{LoaderSource, LoaderVersion};
-use crate::manifest::VersionEntry;
-use crate::paths::Paths;
-use crate::settings::Settings;
+use crate::events::{AppReporter, ImportReporter};
+
+/// Tauri's own errors, worded for the person using the app.
+fn ui<T>(result: tauri::Result<T>) -> Result<T> {
+    result.map_err(|e| msg(e.to_string()))
+}
 
 struct AppState {
     paths: Paths,
@@ -161,16 +151,30 @@ async fn launch_instance(app: AppHandle, state: State<'_, AppState>, running: St
         return Err(msg("This instance is already running."));
     }
     let mut instance = instances::get(&state.paths, &id)?;
-    game::clear_log(&app, &id);
+    events::clear_log(&app, &id);
     // Sign in first so a missing account fails before a long download.
     let session = auth::session(&state.http, &state.paths, &state.sessions).await?;
-    // Always re-verify files; already-valid ones are skipped.
     let settings = settings::load(&state.paths);
     let mut reporter = AppReporter::new(app.clone(), id.clone());
     // Only missing files download; Verify Game Files re-hashes everything.
     let installed = install::install(&state.http, &state.paths, &settings, &instance, Verify::Existing, &mut reporter).await?;
     let command = launch::build_command(&state.paths, &instance, &installed.resolved, &session, &settings, &installed.java)?;
-    game::spawn(app, id, command)?;
+    let stop = running.start(&id);
+    let (log_app, log_id) = (app.clone(), id.clone());
+    let (exit_app, exit_id) = (app.clone(), id.clone());
+    let started = game::spawn(
+        command,
+        stop,
+        move |line| events::emit_log(&log_app, &log_id, line),
+        move |code| {
+            exit_app.state::<Running>().finished(&exit_id);
+            events::emit_exit(&exit_app, &exit_id, code);
+        },
+    );
+    if let Err(e) = started {
+        running.finished(&id);
+        return Err(e);
+    }
     instance.installed = true;
     instance.profile_id = Some(installed.resolved.id);
     instance.last_played = Some(instances::now());
@@ -229,7 +233,7 @@ async fn install_modpack(app: AppHandle, state: State<'_, AppState>, source: mod
     let settings = settings::load(&state.paths);
     let sites = mods::Sites { client: &state.http, curseforge_key: settings.curseforge_key() };
     let mut reporter = ImportReporter::new(app);
-    install::Reporter::stage(&mut reporter, "Downloading the modpack…");
+    clover_core::install::Reporter::stage(&mut reporter, "Downloading the modpack…");
     let file = modpacks::download(&sites, &state.paths, source, &project).await?;
     let result = modpacks::import(&sites, &state.paths, &file, &mut reporter).await;
     let _ = std::fs::remove_file(file);
@@ -305,12 +309,12 @@ async fn upload_log(state: State<'_, AppState>, logs: State<'_, GameLogs>, id: S
 #[tauri::command]
 fn open_log_window(app: AppHandle, state: State<'_, AppState>, id: String) -> Result<()> {
     let instance = instances::get(&state.paths, &id)?;
-    Ok(game::open_log_window(&app, &instance.id, &instance.name)?)
+    ui(events::open_log_window(&app, &instance.id, &instance.name))
 }
 
 #[tauri::command]
 fn pop_in_log_window(app: AppHandle, id: String) -> Result<()> {
-    Ok(game::pop_in_log_window(&app, &id)?)
+    ui(events::pop_in_log_window(&app, &id))
 }
 
 #[tauri::command]
@@ -345,7 +349,7 @@ fn get_accounts(state: State<'_, AppState>) -> auth::Accounts {
 /// Rebuilds the menu bar's account list after any account change.
 fn accounts_changed(app: &AppHandle, paths: &Paths) -> Result<auth::Accounts> {
     let accounts = auth::accounts(paths);
-    app.set_menu(menu::build(app, &accounts)?)?;
+    ui(menu::build(app, &accounts).and_then(|menu| app.set_menu(menu)))?;
     Ok(accounts)
 }
 
@@ -474,7 +478,7 @@ pub fn run() {
                 // Modrinth asks clients to name themselves this way.
                 .user_agent(concat!("CloverNetwork/Clover-Launcher/", env!("CARGO_PKG_VERSION")))
                 .build()?;
-            let paths = Paths::new(app.handle())?;
+            let paths = Paths::new(app.path().app_data_dir()?)?;
             app.set_menu(menu::build(app.handle(), &auth::accounts(&paths))?)?;
             app.manage(AppState { paths, http, sessions: auth::SessionCache::default() });
             app.on_menu_event(|app, event| menu::handle(app, event.id().as_ref()));

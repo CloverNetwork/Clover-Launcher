@@ -20,9 +20,12 @@ pnpm tauri dev
 
 `pnpm tauri build` makes a release build.
 
+The launcher itself lives in `crates/clover-core`, a plain Rust library with no UI.
+`src-tauri` and `src` are the app on top of it. `cargo test --workspace` runs the tests.
+
 ## Notes
 
-Sign-in uses the Azure app ID in `src-tauri/src/auth.rs`. It needs "Allow public client
+Sign-in uses the Azure app ID in `crates/clover-core/src/auth.rs`. It needs "Allow public client
 flows" turned on in Azure, and Mojang has to approve it before Minecraft accepts its tokens.
 Debug builds have an offline account for testing in the meantime.
 

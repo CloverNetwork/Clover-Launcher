@@ -1,11 +1,9 @@
 [package]
 name = "clover-launcher"
-version = "0.1.0"
 description = "Clover Launcher, a Minecraft: Java Edition launcher"
-authors = ["you"]
-edition = "2024"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+version.workspace = true
+edition.workspace = true
+license.workspace = true
 
 [lib]
 # The `_lib` suffix may seem redundant but it is necessary
@@ -18,29 +16,11 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+clover-core = { path = "../crates/clover-core" }
 tauri = { version = "2", features = ["macos-private-api"] }
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "io-util", "fs", "sync", "time"] }
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "multipart"] }
-futures = "0.3"
-sha1 = "0.10"
-md-5 = "0.10"
-hex = "0.4"
-base64 = "0.22"
-bytes = "1"
-zip = { version = "2", default-features = false, features = ["deflate"] }
-thiserror = "2"
-uuid = { version = "1", features = ["v4"] }
-keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
-
-
-# Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
-[profile.release]
-codegen-units = 1
-lto = true
-opt-level = 3
-panic = "abort"
-strip = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+reqwest.workspace = true

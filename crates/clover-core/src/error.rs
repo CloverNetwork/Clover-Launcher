@@ -9,8 +9,6 @@ pub enum Error {
     #[error(transparent)]
     Zip(#[from] zip::result::ZipError),
     #[error(transparent)]
-    Tauri(#[from] tauri::Error),
-    #[error(transparent)]
     Keyring(#[from] keyring::Error),
     #[error("{0}")]
     Msg(String),

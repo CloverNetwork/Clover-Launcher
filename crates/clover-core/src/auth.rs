@@ -75,7 +75,7 @@ impl MsError {
              (Authentication › Advanced settings)."
                 .into()
         } else if description.contains("AADSTS700016") {
-            "Microsoft doesn't recognize Clover's app ID. Check CLIENT_ID in src-tauri/src/auth.rs.".into()
+            "Microsoft doesn't recognize Clover's app ID. Check CLIENT_ID in crates/clover-core/src/auth.rs.".into()
         } else if description.contains("AADSTS50020") || description.contains("AADSTS9002331") {
             "Clover's Azure app needs to allow personal Microsoft accounts.".into()
         } else {

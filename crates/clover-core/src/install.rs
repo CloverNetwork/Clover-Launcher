@@ -1,8 +1,6 @@
 use std::path::PathBuf;
 
 use reqwest::Client;
-use serde::Serialize;
-use tauri::{AppHandle, Emitter};
 
 use crate::download::{self, Task, Verify};
 use crate::error::{Result, msg};
@@ -13,93 +11,16 @@ use crate::paths::Paths;
 use crate::profile::{self, Resolved};
 use crate::settings::Settings;
 
-/// Where install progress goes: the window in the app, stdout in tests.
+/// Where install progress goes: the app's windows, or stdout in tests.
 pub trait Reporter: Send {
     fn stage(&mut self, text: &str);
     fn files(&mut self, done: usize, total: usize);
     fn log(&mut self, line: String);
 }
 
-#[derive(Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct Progress {
-    instance_id: String,
-    stage: Option<String>,
-    done: usize,
-    total: usize,
-}
-
-/// Sends progress to the frontend as `install-progress` and installer output as `game-log`.
-pub struct AppReporter {
-    pub app: AppHandle,
-    pub instance_id: String,
-    last_emitted: usize,
-}
-
-impl AppReporter {
-    pub fn new(app: AppHandle, instance_id: String) -> Self {
-        Self { app, instance_id, last_emitted: 0 }
-    }
-}
-
-impl Reporter for AppReporter {
-    fn stage(&mut self, text: &str) {
-        let progress = Progress { instance_id: self.instance_id.clone(), stage: Some(text.into()), done: 0, total: 0 };
-        let _ = self.app.emit("install-progress", progress);
-    }
-
-    fn files(&mut self, done: usize, total: usize) {
-        // Emit roughly every 1% so the UI stays smooth without flooding IPC.
-        if done == total || done < self.last_emitted || done - self.last_emitted >= (total / 100).max(1) {
-            self.last_emitted = done;
-            let _ = self.app.emit("install-progress", Progress { instance_id: self.instance_id.clone(), stage: None, done, total });
-        }
-    }
-
-    fn log(&mut self, line: String) {
-        crate::game::emit_log(&self.app, &self.instance_id, line);
-    }
-}
-
 /// The client jar on the classpath, named after the profile as the official launcher does.
 /// Loaders rely on the name: NeoForge and Forge skip `${version_name}.jar` when they
 /// build their module layer, so a jar named after the vanilla version would clash.
-/// Progress for a modpack import, sent as `import-progress` since there's no instance
-/// to name until the pack has been read.
-pub struct ImportReporter {
-    app: AppHandle,
-    last_emitted: usize,
-}
-
-impl ImportReporter {
-    pub fn new(app: AppHandle) -> Self {
-        Self { app, last_emitted: 0 }
-    }
-}
-
-#[derive(Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ImportProgress<'a> {
-    stage: Option<&'a str>,
-    done: usize,
-    total: usize,
-}
-
-impl Reporter for ImportReporter {
-    fn stage(&mut self, text: &str) {
-        let _ = self.app.emit("import-progress", ImportProgress { stage: Some(text), done: 0, total: 0 });
-    }
-
-    fn files(&mut self, done: usize, total: usize) {
-        if done == total || done < self.last_emitted || done - self.last_emitted >= (total / 100).max(1) {
-            self.last_emitted = done;
-            let _ = self.app.emit("import-progress", ImportProgress { stage: None, done, total });
-        }
-    }
-
-    fn log(&mut self, _: String) {}
-}
-
 pub fn client_jar_path(paths: &Paths, resolved: &Resolved) -> PathBuf {
     profile::jar_path(paths, &resolved.id)
 }

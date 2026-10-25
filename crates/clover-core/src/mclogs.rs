@@ -43,7 +43,7 @@ pub async fn upload(client: &Client, lines: &[String], secrets: &[String], detai
         "metadata": [
             { "key": "minecraft", "label": "Minecraft", "value": details.minecraft },
             { "key": "loader", "label": "Mod Loader", "value": details.loader },
-            { "key": "launcher", "label": "Launcher", "value": concat!("Clover Launcher ", env!("CARGO_PKG_VERSION")) },
+            { "key": "launcher", "label": "Launcher", "value": format!("Clover Launcher {}", crate::LAUNCHER_VERSION) },
         ],
     });
     let response: Response = client.post(API).json(&body).send().await?.json().await?;

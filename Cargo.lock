@@ -499,7 +499,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "clover-launcher"
+name = "clover-core"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
@@ -512,14 +512,25 @@ dependencies = [
  "serde",
  "serde_json",
  "sha1",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
- "tauri-plugin-opener",
  "thiserror 2.0.21",
  "tokio",
  "uuid",
  "zip",
+]
+
+[[package]]
+name = "clover-launcher"
+version = "0.1.0"
+dependencies = [
+ "clover-core",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+ "tauri-plugin-opener",
+ "tokio",
 ]
 
 [[package]]

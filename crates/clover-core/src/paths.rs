@@ -1,7 +1,5 @@
 use std::path::PathBuf;
 
-use tauri::{AppHandle, Manager};
-
 use crate::error::Result;
 
 /// On-disk layout, rooted at the app data directory:
@@ -18,12 +16,13 @@ pub struct Paths {
 }
 
 impl Paths {
-    pub fn new(app: &AppHandle) -> Result<Self> {
-        let root = app.path().app_data_dir()?;
+    /// Clover's data folder. The app passes the platform's app data directory.
+    pub fn new(root: PathBuf) -> Result<Self> {
         std::fs::create_dir_all(&root)?;
         Ok(Self { root })
     }
 
+    /// For tests: a folder that may not exist yet.
     #[cfg(test)]
     pub fn at(root: PathBuf) -> Self {
         Self { root }

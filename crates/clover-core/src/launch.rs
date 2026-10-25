@@ -57,8 +57,8 @@ pub fn build_command(
         ("library_directory", paths.libraries().to_string_lossy().into_owned()),
         ("classpath_separator", CLASSPATH_SEPARATOR.into()),
         ("classpath", classpath.join(CLASSPATH_SEPARATOR)),
-        ("launcher_name", env!("CARGO_PKG_NAME").into()),
-        ("launcher_version", env!("CARGO_PKG_VERSION").into()),
+        ("launcher_name", crate::LAUNCHER_NAME.into()),
+        ("launcher_version", crate::LAUNCHER_VERSION.into()),
     ]);
     let expand = |arg: &str| {
         vars.iter().fold(arg.to_string(), |acc, (key, value)| acc.replace(&format!("${{{key}}}"), value))

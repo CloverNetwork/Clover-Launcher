@@ -3,7 +3,7 @@
 use tauri::menu::{AboutMetadata, CheckMenuItem, Menu, MenuItem, SubmenuBuilder};
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder, Wry};
 
-use crate::auth::Accounts;
+use clover_core::auth::Accounts;
 
 /// Account item IDs are `account:<uuid>`; the window switches to that account.
 pub const ACCOUNT_PREFIX: &str = "account:";
