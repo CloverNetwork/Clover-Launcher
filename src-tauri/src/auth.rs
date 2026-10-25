@@ -12,9 +12,10 @@ use serde_json::json;
 use crate::error::{Result, msg};
 use crate::paths::Paths;
 
-/// Register a public client app (personal Microsoft accounts) in Azure, then request
-/// Minecraft API access for it at https://aka.ms/mce-reviewappid before release.
-pub const CLIENT_ID: &str = "00000000-0000-0000-0000-000000000000";
+/// Clover's Azure app: personal Microsoft accounts, with "Allow public client flows" on
+/// (Authentication > Advanced settings) for the device code flow. Minecraft API access
+/// must also be approved at https://aka.ms/mce-reviewappid. Client IDs aren't secret.
+pub const CLIENT_ID: &str = "77dcc4f4-53bd-4b2a-a766-21021f471ced";
 
 const SCOPE: &str = "XboxLive.signin offline_access";
 const DEVICE_CODE_URL: &str = "https://login.microsoftonline.com/consumers/oauth2/v2.0/devicecode";
@@ -62,14 +63,34 @@ struct MsToken {
 #[derive(Deserialize)]
 struct MsError {
     error: String,
+    error_description: Option<String>,
+}
+
+impl MsError {
+    /// Plain-language versions of the Azure setup errors a new app registration hits.
+    fn explain(&self) -> String {
+        let description = self.error_description.as_deref().unwrap_or_default();
+        if description.contains("AADSTS70002") || description.contains("AADSTS7000218") {
+            "Sign-in isn't set up yet: turn on “Allow public client flows” for Clover's app in the Azure portal \
+             (Authentication › Advanced settings)."
+                .into()
+        } else if description.contains("AADSTS700016") {
+            "Microsoft doesn't recognize Clover's app ID. Check CLIENT_ID in src-tauri/src/auth.rs.".into()
+        } else if description.contains("AADSTS50020") || description.contains("AADSTS9002331") {
+            "Clover's Azure app needs to allow personal Microsoft accounts.".into()
+        } else {
+            let summary = description.split(" Trace ID").next().unwrap_or(&self.error);
+            format!("Microsoft sign-in failed: {summary}")
+        }
+    }
 }
 
 pub async fn begin(client: &Client) -> Result<DeviceCode> {
-    if CLIENT_ID.starts_with("00000000") {
-        return Err(msg("Sign-in isn't configured. Set CLIENT_ID in src-tauri/src/auth.rs."));
-    }
     let res = client.post(DEVICE_CODE_URL).form(&[("client_id", CLIENT_ID), ("scope", SCOPE)]).send().await?;
-    Ok(res.error_for_status()?.json().await?)
+    if !res.status().is_success() {
+        return Err(msg(res.json::<MsError>().await?.explain()));
+    }
+    Ok(res.json().await?)
 }
 
 /// Polls until the person finishes signing in on microsoft.com, then completes the chain.
@@ -93,12 +114,13 @@ pub async fn finish(client: &Client, paths: &Paths, device_code: &str, interval:
         if res.status().is_success() {
             break res.json::<MsToken>().await?;
         }
-        match res.json::<MsError>().await?.error.as_str() {
+        let error = res.json::<MsError>().await?;
+        match error.error.as_str() {
             "authorization_pending" => continue,
             "slow_down" => interval += 5,
             "authorization_declined" => return Err(msg("Sign-in was cancelled.")),
             "expired_token" => return Err(msg("The sign-in code expired. Try signing in again.")),
-            other => return Err(msg(format!("Microsoft sign-in failed: {other}"))),
+            _ => return Err(msg(error.explain())),
         }
     };
     let session = minecraft_session(client, &token.access_token).await?;
@@ -348,14 +370,19 @@ async fn minecraft_session(client: &Client, ms_access_token: &str) -> Result<Ses
     let xsts: XboxToken = res.error_for_status()?.json().await?;
     let xui = xsts.display_claims.xui.first().ok_or_else(|| msg("Xbox Live returned no user."))?;
 
-    let login: McLogin = client
+    let res = client
         .post("https://api.minecraftservices.com/authentication/login_with_xbox")
         .json(&json!({ "identityToken": format!("XBL3.0 x={};{}", xui.uhs, xsts.token) }))
         .send()
-        .await?
-        .error_for_status()?
-        .json()
         .await?;
+    // Until Mojang approves the app, Minecraft services refuse its tokens with a 403.
+    if res.status() == reqwest::StatusCode::FORBIDDEN {
+        return Err(msg(
+            "Microsoft sign-in worked, but Mojang hasn't approved Clover for Minecraft yet. \
+             Approval comes through aka.ms/mce-reviewappid; until then, use an offline account in development builds.",
+        ));
+    }
+    let login: McLogin = res.error_for_status()?.json().await?;
 
     let res = client
         .get("https://api.minecraftservices.com/minecraft/profile")
@@ -380,6 +407,24 @@ mod tests {
     fn offline_uuid_matches_vanilla_servers() {
         // Known value from an offline-mode server for the player "Notch".
         assert_eq!(super::offline_uuid("Notch"), "b50ad385829d3141a2167e7d7539ba7f");
+    }
+
+    /// Asks Microsoft for a sign-in code with Clover's real app ID. Passes once the Azure
+    /// registration allows public client flows. Run with `cargo test device_code -- --ignored`.
+    #[tokio::test]
+    #[ignore]
+    async fn device_code_with_real_app() {
+        match super::begin(&reqwest::Client::new()).await {
+            Ok(code) => println!("Microsoft issued a code for {}", code.verification_uri),
+            Err(e) => panic!("{e}"),
+        }
+    }
+
+    #[test]
+    fn explains_azure_setup_errors() {
+        let error = |description: &str| super::MsError { error: "invalid_client".into(), error_description: Some(description.into()) };
+        assert!(error("AADSTS70002: The client application must be marked as 'mobile.' Trace ID: x").explain().contains("Allow public client flows"));
+        assert_eq!(error("AADSTS9999: Something new. Trace ID: abc").explain(), "Microsoft sign-in failed: AADSTS9999: Something new.");
     }
 
     #[test]

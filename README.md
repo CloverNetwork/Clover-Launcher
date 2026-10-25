@@ -11,9 +11,17 @@ pnpm tauri dev
 
 ## Before you can play
 
-1. **Microsoft sign-in.** Register a public client app (personal Microsoft accounts) in Azure,
-   put its ID in `CLIENT_ID` in `src-tauri/src/auth.rs`, and request Minecraft API access at
-   <https://aka.ms/mce-reviewappid>. Approval can take a while, so start early.
+1. **Microsoft sign-in.** Clover's Azure app ID is set in `CLIENT_ID` in
+   `src-tauri/src/auth.rs`. It needs three things:
+   - **Personal accounts:** the app is registered for personal Microsoft accounts.
+   - **Public client flows:** turn on *Allow public client flows* under Authentication ›
+     Advanced settings. Without it Microsoft answers AADSTS70002.
+   - **Mojang approval:** request Minecraft API access at <https://aka.ms/mce-reviewappid>.
+     Until it's approved, Microsoft sign-in completes but Minecraft refuses the token, and
+     Clover says so.
+
+   `cargo test device_code -- --ignored` checks the first two against Microsoft. Use an
+   offline account in development builds while approval is pending.
 2. **Java.** Install the Java version the game asks for (21 for current releases) or point
    Settings (⌘,) at it. Bundling Mojang's runtimes is a TODO.
 
