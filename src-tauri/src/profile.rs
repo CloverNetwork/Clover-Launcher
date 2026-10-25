@@ -8,7 +8,7 @@ use reqwest::Client;
 use crate::download::{self, Task, Verify};
 use crate::error::{Result, msg};
 use crate::manifest::{
-    self, Argument, Artifact, AssetIndexRef, Library, LoggingClient, VersionJson, VersionManifest, rules_allow,
+    self, Argument, Artifact, AssetIndexRef, JavaVersion, Library, LoggingClient, VersionJson, VersionManifest, rules_allow,
 };
 use crate::paths::Paths;
 
@@ -30,7 +30,7 @@ pub struct Resolved {
     pub game_args: Vec<Argument>,
     pub jvm_args: Vec<Argument>,
     pub legacy_game_args: Option<String>,
-    pub java_major: Option<u32>,
+    pub java: Option<JavaVersion>,
     pub logging: Option<LoggingClient>,
 }
 
@@ -134,7 +134,7 @@ fn merge(chain: Vec<VersionJson>) -> Result<Resolved> {
         asset_index: chain.iter().find_map(|j| j.asset_index.clone()).ok_or_else(|| missing("asset index"))?,
         client: root.downloads.as_ref().map(|d| d.client.clone()).ok_or_else(|| missing("client download"))?,
         legacy_game_args: chain.iter().find_map(|j| j.minecraft_arguments.clone()),
-        java_major: chain.iter().find_map(|j| j.java_version.as_ref().map(|v| v.major_version)),
+        java: chain.iter().find_map(|j| j.java_version.clone()),
         logging: chain.iter().find_map(|j| j.logging.as_ref().and_then(|l| l.client.clone())),
         libraries,
         game_args,

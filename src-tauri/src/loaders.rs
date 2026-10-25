@@ -248,11 +248,11 @@ pub async fn ensure_profile(
                 }
                 SourceKind::Forge => {
                     let url = format!("https://maven.minecraftforge.net/net/minecraftforge/forge/{version}/forge-{version}-installer.jar");
-                    run_installer(client, paths, settings, &url, verify, reporter).await
+                    run_installer(client, paths, settings, instance, &url, verify, reporter).await
                 }
                 SourceKind::NeoForge => {
                     let url = format!("https://maven.neoforged.net/releases/net/neoforged/neoforge/{version}/neoforge-{version}-installer.jar");
-                    run_installer(client, paths, settings, &url, verify, reporter).await
+                    run_installer(client, paths, settings, instance, &url, verify, reporter).await
                 }
             }
         }
@@ -290,6 +290,7 @@ async fn run_installer(
     client: &Client,
     paths: &Paths,
     settings: &Settings,
+    instance: &Instance,
     url: &str,
     verify: Verify,
     reporter: &mut impl Reporter,
@@ -310,7 +311,12 @@ async fn run_installer(
         std::fs::write(&profiles, r#"{"profiles":{}}"#)?;
     }
 
-    let mut child = Command::new(&settings.java_path)
+    // The installer runs on the Java of the Minecraft version it patches.
+    let vanilla = profile::resolve(client, paths, &instance.version, verify).await?;
+    let need = crate::java::requirement(vanilla.java.as_ref());
+    let java = crate::java::find_or_install(client, paths, settings, &need, verify, reporter).await?;
+    reporter.stage(&format!("Running the {} installer…", if url.contains("neoforge") { "NeoForge" } else { "Forge" }));
+    let mut child = Command::new(&java)
         .arg("-jar")
         .arg(&installer)
         .arg("--installClient")
@@ -320,7 +326,7 @@ async fn run_installer(
         .stderr(Stdio::piped())
         .kill_on_drop(true)
         .spawn()
-        .map_err(|e| msg(format!("Couldn't start Java to run the installer ({e}). Check the Java path in Settings.")))?;
+        .map_err(crate::game::java_start_error)?;
 
     let mut out = BufReader::new(child.stdout.take().expect("piped")).lines();
     let mut err = BufReader::new(child.stderr.take().expect("piped")).lines();

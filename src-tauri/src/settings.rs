@@ -7,7 +7,8 @@ use crate::paths::Paths;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
-    /// Path to a `java` executable. "java" resolves from PATH.
+    /// A `java` executable to use for every version. Empty means automatic: the Java each
+    /// version needs, downloaded when the computer doesn't have it.
     pub java_path: String,
     pub memory_mb: u32,
     /// Fabric-compatible meta servers the person added.
@@ -16,7 +17,15 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { java_path: "java".into(), memory_mb: 4096, loader_sources: vec![] }
+        Self { java_path: String::new(), memory_mb: 4096, loader_sources: vec![] }
+    }
+}
+
+impl Settings {
+    /// The person's own Java, if they chose one. Older settings stored "java" for "the one on
+    /// the PATH"; that now means automatic too.
+    pub fn custom_java(&self) -> Option<&str> {
+        Some(self.java_path.trim()).filter(|p| !p.is_empty() && *p != "java")
     }
 }
 

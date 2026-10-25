@@ -13,7 +13,10 @@
   let sourceError = $state<string | null>(null);
 
   onMount(async () => {
-    settings = await api.getSettings();
+    const loaded = await api.getSettings();
+    // "java" meant "whatever is on the PATH" before automatic Java existed.
+    if (loaded.javaPath.trim() === "java") loaded.javaPath = "";
+    settings = loaded;
   });
 
   function save() {
@@ -54,8 +57,19 @@
     <form class="settings" onsubmit={(e) => e.preventDefault()}>
       <label for="java">Java:</label>
       <div>
-        <input id="java" class="field" bind:value={settings.javaPath} oninput={save} spellcheck="false" autocomplete="off" />
-        <p class="hint secondary">Path to a Java executable. Leave as “java” to use the one on your PATH.</p>
+        <input
+          id="java"
+          class="field"
+          bind:value={settings.javaPath}
+          oninput={save}
+          placeholder="Automatic"
+          spellcheck="false"
+          autocomplete="off"
+        />
+        <p class="hint secondary">
+          Leave empty to use the Java each Minecraft version needs. Clover downloads it if this computer doesn't
+          have it. Enter a path to use one Java for everything.
+        </p>
       </div>
 
       <label for="memory">Memory:</label>

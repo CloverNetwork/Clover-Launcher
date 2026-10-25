@@ -40,12 +40,9 @@ struct GameExit {
     code: Option<i32>,
 }
 
-pub fn spawn(app: AppHandle, instance_id: String, mut command: Command, java_major: Option<u32>) -> Result<()> {
+pub fn spawn(app: AppHandle, instance_id: String, mut command: Command) -> Result<()> {
     command.stdout(Stdio::piped()).stderr(Stdio::piped()).kill_on_drop(true);
-    let mut child = command.spawn().map_err(|e| {
-        let needs = java_major.map(|v| format!(" This version needs Java {v}.")).unwrap_or_default();
-        msg(format!("Couldn't start Java ({e}). Check the Java path in Settings.{needs}"))
-    })?;
+    let mut child = command.spawn().map_err(java_start_error)?;
     if let Some(out) = child.stdout.take() {
         pipe(app.clone(), instance_id.clone(), out);
     }
@@ -68,6 +65,17 @@ pub fn spawn(app: AppHandle, instance_id: String, mut command: Command, java_maj
         let _ = app.emit("game-exit", GameExit { instance_id, code });
     });
     Ok(())
+}
+
+/// Explains why Java didn't start. Error 86 is macOS refusing an Intel program because
+/// Rosetta isn't installed, which happens with the Java 8 that old versions use.
+pub fn java_start_error(e: std::io::Error) -> crate::error::Error {
+    if cfg!(target_os = "macos") && e.raw_os_error() == Some(86) {
+        msg("This version runs on Intel Java, which needs Rosetta. Install it by running \
+             “softwareupdate --install-rosetta” in Terminal, then try again.")
+    } else {
+        msg(format!("Couldn't start Java ({e}). Check the Java setting in Settings, or leave it empty to use automatic Java."))
+    }
 }
 
 fn pipe(app: AppHandle, instance_id: String, stream: impl AsyncRead + Unpin + Send + 'static) {

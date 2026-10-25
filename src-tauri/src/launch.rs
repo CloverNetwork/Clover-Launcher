@@ -17,7 +17,14 @@ const CLASSPATH_SEPARATOR: &str = if cfg!(windows) { ";" } else { ":" };
 
 /// Builds the `java` command for an installed version, substituting the
 /// `${placeholders}` that version JSONs use in their arguments.
-pub fn build_command(paths: &Paths, instance: &Instance, version: &Resolved, session: &Session, settings: &Settings) -> Result<Command> {
+pub fn build_command(
+    paths: &Paths,
+    instance: &Instance,
+    version: &Resolved,
+    session: &Session,
+    settings: &Settings,
+    java: &Path,
+) -> Result<Command> {
     let game_dir = paths.instance(&instance.id).join("minecraft");
     let natives_dir = paths.instance(&instance.id).join("natives");
     std::fs::create_dir_all(&game_dir)?;
@@ -74,7 +81,7 @@ pub fn build_command(paths: &Paths, instance: &Instance, version: &Resolved, ses
         _ => args.extend(game_args),
     }
 
-    let mut command = Command::new(&settings.java_path);
+    let mut command = Command::new(java);
     command.args(args.iter().map(|a| expand(a))).current_dir(&game_dir);
     Ok(command)
 }

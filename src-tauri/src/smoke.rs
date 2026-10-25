@@ -110,7 +110,8 @@ async fn prepares_every_builtin_loader() {
         println!("{loader} {} for {game}", version.as_deref().unwrap_or("-"));
         let instance = instance(loader, game, version);
         let resolved = prepare(&client, &paths, &instance).await;
-        let command = launch::build_command(&paths, &instance, &resolved, &session(), &Settings::default()).unwrap();
+        let java = std::path::Path::new("java");
+        let command = launch::build_command(&paths, &instance, &resolved, &session(), &Settings::default(), java).unwrap();
         let args: Vec<String> = command.as_std().get_args().map(|a| a.to_string_lossy().into_owned()).collect();
         let classpath = &args[args.iter().position(|a| a == "-cp").expect("has -cp") + 1];
         for entry in classpath.split(':') {
@@ -129,8 +130,11 @@ async fn boots(loader: &str, game: &str, loader_marker: &str) {
     let paths = Paths::at(root());
     let instance = instance(loader, game, Some(latest(&client, loader, game).await));
     // The full install, assets and log config included, exactly as the app does it.
-    let (resolved, _) = crate::install::install(&client, &paths, &Settings::default(), &instance, Verify::Existing, &mut Print).await.unwrap();
-    let mut command = launch::build_command(&paths, &instance, &resolved, &session(), &Settings::default()).unwrap();
+    // Java is picked automatically, downloading Mojang's runtime if this computer lacks it.
+    let installed = crate::install::install(&client, &paths, &Settings::default(), &instance, Verify::Existing, &mut Print).await.unwrap();
+    println!("  java: {}", installed.java.display());
+    let mut command =
+        launch::build_command(&paths, &instance, &installed.resolved, &session(), &Settings::default(), &installed.java).unwrap();
     command.stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped()).kill_on_drop(true);
     let mut child = command.spawn().unwrap();
     let mut stderr = BufReader::new(child.stderr.take().unwrap()).lines();
@@ -196,15 +200,17 @@ async fn boots_legacy_fabric() {
     boots("legacy-fabric", "1.8.9", "with Fabric Loader").await;
 }
 
-/// Vanilla 1.8.9 ships Intel-only LWJGL natives, so on Apple silicon this needs an
-/// x86_64 Java under Rosetta until Clover swaps in arm64 natives.
+/// Vanilla 1.8.9 ships Intel-only LWJGL natives; on Apple silicon the automatic Java 8 is
+/// Mojang's Intel build, which runs them under Rosetta.
 #[tokio::test]
 #[ignore]
 async fn boots_ornithe() {
     boots("ornithe", "1.8.9", "with Fabric Loader").await;
 }
 
-/// Beta 1.7.3 uses `java.applet`, which Java 26 removed: point Settings at Java 8 to run it.
+/// Beta 1.7.3 uses `java.applet`, which newer Java removed; the automatic Java 8 still has it.
+/// On Apple silicon (macOS 27, Intel Java 8 under Rosetta) the loader starts but the game
+/// stops after LWJGL reports "Native cursors not supported", so this fails there.
 #[tokio::test]
 #[ignore]
 async fn boots_babric() {
@@ -221,19 +227,20 @@ async fn relaunch_downloads_nothing() {
     let settings = Settings::default();
     let mut instance = instance("fabric", "1.21.4", Some(latest(&client, "fabric", "1.21.4").await));
 
-    let (resolved, first) = crate::install::install(&client, &paths, &settings, &instance, Verify::Existing, &mut Print).await.unwrap();
+    let installed = crate::install::install(&client, &paths, &settings, &instance, Verify::Existing, &mut Print).await.unwrap();
+    let (resolved, first) = (installed.resolved, installed.downloaded);
     println!("  first install: {first} files");
     instance.profile_id = Some(resolved.id.clone());
 
     let started = std::time::Instant::now();
-    let (_, second) = crate::install::install(&client, &paths, &settings, &instance, Verify::Existing, &mut Print).await.unwrap();
+    let second = crate::install::install(&client, &paths, &settings, &instance, Verify::Existing, &mut Print).await.unwrap().downloaded;
     println!("  second launch: {second} files in {:?}", started.elapsed());
     assert_eq!(second, 0, "a second launch downloaded files");
     assert!(started.elapsed() < Duration::from_secs(3), "a second launch took {:?}", started.elapsed());
 
     let client_jar = profile::jar_path(&paths, &resolved.jar_id);
     std::fs::write(&client_jar, b"damaged").unwrap();
-    let (_, repaired) = crate::install::install(&client, &paths, &settings, &instance, Verify::Full, &mut Print).await.unwrap();
+    let repaired = crate::install::install(&client, &paths, &settings, &instance, Verify::Full, &mut Print).await.unwrap().downloaded;
     println!("  verify: replaced {repaired} files");
     assert_eq!(repaired, 1, "Verify Game Files should replace exactly the damaged jar");
 }

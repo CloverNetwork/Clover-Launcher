@@ -139,6 +139,9 @@ pub enum ArgValue {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct JavaVersion {
+    /// Mojang's runtime name, e.g. "java-runtime-delta" for Java 21.
+    #[serde(default)]
+    pub component: String,
     pub major_version: u32,
 }
 

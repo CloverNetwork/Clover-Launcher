@@ -4,6 +4,7 @@ mod error;
 mod game;
 mod install;
 mod instances;
+mod java;
 mod launch;
 mod loaders;
 mod manifest;
@@ -144,11 +145,11 @@ async fn verify_instance(app: AppHandle, state: State<'_, AppState>, running: St
     let mut instance = instances::get(&state.paths, &id)?;
     let settings = settings::load(&state.paths);
     let mut reporter = AppReporter::new(app, id);
-    let (resolved, downloaded) = install::install(&state.http, &state.paths, &settings, &instance, Verify::Full, &mut reporter).await?;
+    let installed = install::install(&state.http, &state.paths, &settings, &instance, Verify::Full, &mut reporter).await?;
     instance.installed = true;
-    instance.profile_id = Some(resolved.id);
+    instance.profile_id = Some(installed.resolved.id);
     instances::save(&state.paths, &instance)?;
-    Ok((instance, downloaded))
+    Ok((instance, installed.downloaded))
 }
 
 #[tauri::command]
@@ -163,11 +164,11 @@ async fn launch_instance(app: AppHandle, state: State<'_, AppState>, running: St
     let settings = settings::load(&state.paths);
     let mut reporter = AppReporter::new(app.clone(), id.clone());
     // Only missing files download; Verify Game Files re-hashes everything.
-    let (version, _) = install::install(&state.http, &state.paths, &settings, &instance, Verify::Existing, &mut reporter).await?;
-    let command = launch::build_command(&state.paths, &instance, &version, &session, &settings)?;
-    game::spawn(app, id, command, version.java_major)?;
+    let installed = install::install(&state.http, &state.paths, &settings, &instance, Verify::Existing, &mut reporter).await?;
+    let command = launch::build_command(&state.paths, &instance, &installed.resolved, &session, &settings, &installed.java)?;
+    game::spawn(app, id, command)?;
     instance.installed = true;
-    instance.profile_id = Some(version.id);
+    instance.profile_id = Some(installed.resolved.id);
     instance.last_played = Some(instances::now());
     instances::save(&state.paths, &instance)?;
     Ok(instance)

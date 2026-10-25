@@ -7,7 +7,7 @@ use tauri::{AppHandle, Emitter};
 use crate::download::{self, Task, Verify};
 use crate::error::{Result, msg};
 use crate::instances::Instance;
-use crate::loaders;
+use crate::{java, loaders};
 use crate::manifest::{AssetIndex, RESOURCES_URL};
 use crate::paths::Paths;
 use crate::profile::{self, Resolved};
@@ -90,7 +90,14 @@ pub fn link_client_jar(paths: &Paths, resolved: &Resolved, force: bool) -> Resul
 
 /// Prepares the instance's loader, then downloads whatever its resolved profile needs and
 /// isn't on disk yet: client jar, libraries, legacy natives, assets and log config.
-/// Returns the resolved profile and how many files were downloaded.
+pub struct Installed {
+    pub resolved: Resolved,
+    /// The `java` to launch it with.
+    pub java: PathBuf,
+    /// How many files were downloaded, Java's included.
+    pub downloaded: usize,
+}
+
 pub async fn install(
     client: &Client,
     paths: &Paths,
@@ -98,7 +105,7 @@ pub async fn install(
     instance: &Instance,
     verify: Verify,
     reporter: &mut impl Reporter,
-) -> Result<(Resolved, usize)> {
+) -> Result<Installed> {
     let profile_id = loaders::ensure_profile(client, paths, settings, instance, verify, reporter).await?;
     reporter.stage(if verify == Verify::Full { "Verifying game files…" } else { "Checking game files…" });
     let resolved = profile::resolve(client, paths, &profile_id, verify).await?;
@@ -151,5 +158,7 @@ pub async fn install(
 
     downloaded += download::run(client, tasks, verify, |done, total| reporter.files(done, total)).await?;
     link_client_jar(paths, &resolved, verify == Verify::Full)?;
-    Ok((resolved, downloaded))
+    let need = java::requirement(resolved.java.as_ref());
+    let java = java::find_or_install(client, paths, settings, &need, verify, reporter).await?;
+    Ok(Installed { resolved, java, downloaded })
 }
