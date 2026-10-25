@@ -96,6 +96,26 @@ pub fn find(settings: &Settings, id: &str) -> Result<LoaderSource> {
         .ok_or_else(|| msg(format!("The mod loader “{id}” isn't set up. Add it again in Settings.")))
 }
 
+/// "Vanilla", "Fabric 0.20.1", "Forge 54.1.0" or "Custom profile", as people read it.
+pub fn label(settings: &Settings, instance: &Instance) -> String {
+    let name = match instance.loader.as_str() {
+        VANILLA => return "Vanilla".into(),
+        CUSTOM => return "Custom profile".into(),
+        id => find(settings, id).map_or_else(|_| id.to_string(), |s| s.name),
+    };
+    let version = instance.loader_version.as_deref().unwrap_or_default();
+    format!("{name} {}", version.trim_start_matches(&format!("{}-", instance.version))).trim().to_string()
+}
+
+/// Makes an instance from any launcher profile JSON, for loaders Clover doesn't list.
+pub fn create_from_profile(paths: &Paths, name: &str, profile_file: &Path) -> Result<Instance> {
+    let bytes = std::fs::read(profile_file).map_err(|e| msg(format!("Couldn't read that file ({e}).")))?;
+    let profile_id = save_profile(paths, &bytes)?;
+    let json = profile::load(paths, &profile_id)?;
+    let game_version = json.inherits_from.unwrap_or_else(|| profile_id.clone());
+    crate::instances::create(paths, name, &game_version, CUSTOM, Some(profile_id))
+}
+
 /// Validates and names a meta server someone adds in Settings.
 pub fn custom_source(name: &str, url: &str, loader_path: &str) -> Result<LoaderSource> {
     let name = name.trim();

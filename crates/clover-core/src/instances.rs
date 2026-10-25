@@ -62,6 +62,9 @@ pub fn create(paths: &Paths, name: &str, version: &str, loader: &str, loader_ver
     if name.is_empty() {
         return Err(msg("Give the instance a name."));
     }
+    if loader != "vanilla" && loader_version.is_none() {
+        return Err(msg("Choose a mod loader version."));
+    }
     let slug: String = name
         .chars()
         .map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_lowercase() } else { '-' })

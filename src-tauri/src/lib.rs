@@ -11,7 +11,7 @@ use clover_core::loaders::{self, LoaderSource, LoaderVersion};
 use clover_core::manifest::{self, VersionEntry};
 use clover_core::paths::Paths;
 use clover_core::settings::{self, Settings};
-use clover_core::{auth, install, launch, mclogs, modpacks, mods, profile, skins};
+use clover_core::{auth, install, launch, mclogs, modpacks, mods, skins};
 use reqwest::Client;
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_opener::OpenerExt;
@@ -104,20 +104,13 @@ fn create_instance(
     loader: String,
     loader_version: Option<String>,
 ) -> Result<Instance> {
-    if loader != loaders::VANILLA && loader_version.is_none() {
-        return Err(msg("Choose a mod loader version."));
-    }
     instances::create(&state.paths, &name, &version, &loader, loader_version)
 }
 
 /// Creates an instance from any launcher profile JSON, for loaders Clover doesn't list.
 #[tauri::command]
 fn create_instance_from_profile(state: State<'_, AppState>, name: String, path: String) -> Result<Instance> {
-    let bytes = std::fs::read(&path).map_err(|e| msg(format!("Couldn't read that file ({e}).")))?;
-    let profile_id = loaders::save_profile(&state.paths, &bytes)?;
-    let json = profile::load(&state.paths, &profile_id)?;
-    let game_version = json.inherits_from.unwrap_or_else(|| profile_id.clone());
-    instances::create(&state.paths, &name, &game_version, loaders::CUSTOM, Some(profile_id))
+    loaders::create_from_profile(&state.paths, &name, std::path::Path::new(&path))
 }
 
 #[tauri::command]
@@ -265,11 +258,7 @@ async fn update_mods(state: State<'_, AppState>, running: State<'_, Running>, id
     let instance = instances::get(&state.paths, &id)?;
     let settings = settings::load(&state.paths);
     let sites = mods::Sites { client: &state.http, curseforge_key: settings.curseforge_key() };
-    let mut changed = Vec::new();
-    for update in &updates {
-        changed.extend(mods::update(&sites, &state.paths, &instance, update).await?);
-    }
-    Ok(changed)
+    mods::update_all(&sites, &state.paths, &instance, &updates).await
 }
 
 #[tauri::command]
@@ -292,16 +281,7 @@ fn show_mods_folder(app: AppHandle, state: State<'_, AppState>, id: String) -> R
 #[tauri::command]
 async fn upload_log(state: State<'_, AppState>, logs: State<'_, GameLogs>, id: String) -> Result<mclogs::Uploaded> {
     let instance = instances::get(&state.paths, &id)?;
-    let name = match instance.loader.as_str() {
-        loaders::VANILLA => "Vanilla".to_string(),
-        loaders::CUSTOM => "Custom profile".to_string(),
-        id => loaders::find(&settings::load(&state.paths), id).map_or_else(|_| id.to_string(), |s| s.name),
-    };
-    let version = instance.loader_version.as_deref().map(|v| v.trim_start_matches(&format!("{}-", instance.version)));
-    let loader = match version {
-        Some(version) if instance.loader != loaders::CUSTOM => format!("{name} {version}"),
-        _ => name,
-    };
+    let loader = loaders::label(&settings::load(&state.paths), &instance);
     let details = mclogs::Details { minecraft: &instance.version, loader: &loader };
     mclogs::upload(&state.http, &logs.lines(&id), &state.sessions.tokens(), details).await
 }

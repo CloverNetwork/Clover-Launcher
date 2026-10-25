@@ -599,6 +599,15 @@ pub async fn update(sites: &Sites<'_>, paths: &Paths, instance: &Instance, updat
     Ok(added)
 }
 
+/// Applies updates one after another. Returns the titles of everything updated or added.
+pub async fn update_all(sites: &Sites<'_>, paths: &Paths, instance: &Instance, updates: &[ModUpdate]) -> Result<Vec<String>> {
+    let mut changed = Vec::new();
+    for item in updates {
+        changed.extend(update(sites, paths, instance, item).await?);
+    }
+    Ok(changed)
+}
+
 pub fn set_enabled(paths: &Paths, instance: &Instance, file: &str, enabled: bool) -> Result<()> {
     check_file_name(file)?;
     let dir = mods_dir(paths, instance);
