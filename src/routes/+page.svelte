@@ -166,7 +166,11 @@
     {#if showingDetail && launcher.selected}
       <InstanceDetail instance={launcher.selected} />
       {#if launcher.logVisible}
-        <GameLog lines={launcher.logs[launcher.selected.id] ?? []} onPopOut={() => launcher.popOutLog()} />
+        <GameLog
+          instanceId={launcher.selected.id}
+          lines={launcher.logs[launcher.selected.id] ?? []}
+          onPopOut={() => launcher.popOutLog()}
+        />
       {/if}
     {:else if grid && launcher.instances.length}
       <InstanceGrid />

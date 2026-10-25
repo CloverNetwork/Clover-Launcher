@@ -24,4 +24,4 @@
   });
 </script>
 
-<GameLog {lines} standalone />
+<GameLog instanceId={id} {lines} standalone />

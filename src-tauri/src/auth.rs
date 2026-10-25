@@ -223,6 +223,11 @@ impl SessionCache {
         self.0.lock().unwrap().insert(session.profile.uuid.clone(), (session.clone(), Instant::now()));
     }
 
+    /// Every access token handed out this run, so uploads can scrub them from logs.
+    pub fn tokens(&self) -> Vec<String> {
+        self.0.lock().unwrap().values().map(|(s, _)| s.access_token.clone()).collect()
+    }
+
     pub fn forget(&self, uuid: &str) {
         self.0.lock().unwrap().remove(uuid);
     }

@@ -65,6 +65,8 @@ export const api = {
   /** The recent output of an instance's game and installers. */
   gameLog: (id: string) => invoke<string[]>("game_log", { id }),
   openLogWindow: (id: string) => invoke<void>("open_log_window", { id }),
+  /** Shares the log on mclo.gs; tokens and the home folder are removed first. */
+  uploadLog: (id: string) => invoke<{ url: string }>("upload_log", { id }),
   showInstanceFolder: (id: string) => invoke<void>("show_instance_folder", { id }),
   getSettings: () => invoke<Settings>("get_settings"),
   saveSettings: (settings: Settings) => invoke<void>("save_settings", { settings }),

@@ -8,6 +8,7 @@ mod java;
 mod launch;
 mod loaders;
 mod manifest;
+mod mclogs;
 mod menu;
 mod paths;
 mod profile;
@@ -178,6 +179,24 @@ async fn launch_instance(app: AppHandle, state: State<'_, AppState>, running: St
 #[tauri::command]
 fn game_log(logs: State<'_, GameLogs>, id: String) -> Vec<String> {
     logs.lines(&id)
+}
+
+/// Shares an instance's log on mclo.gs, with access tokens and the home folder removed.
+#[tauri::command]
+async fn upload_log(state: State<'_, AppState>, logs: State<'_, GameLogs>, id: String) -> Result<mclogs::Uploaded> {
+    let instance = instances::get(&state.paths, &id)?;
+    let name = match instance.loader.as_str() {
+        loaders::VANILLA => "Vanilla".to_string(),
+        loaders::CUSTOM => "Custom profile".to_string(),
+        id => loaders::find(&settings::load(&state.paths), id).map_or_else(|_| id.to_string(), |s| s.name),
+    };
+    let version = instance.loader_version.as_deref().map(|v| v.trim_start_matches(&format!("{}-", instance.version)));
+    let loader = match version {
+        Some(version) if instance.loader != loaders::CUSTOM => format!("{name} {version}"),
+        _ => name,
+    };
+    let details = mclogs::Details { minecraft: &instance.version, loader: &loader };
+    mclogs::upload(&state.http, &logs.lines(&id), &state.sessions.tokens(), details).await
 }
 
 #[tauri::command]
@@ -366,6 +385,7 @@ pub fn run() {
             launch_instance,
             stop_instance,
             game_log,
+            upload_log,
             open_log_window,
             show_instance_folder,
             get_settings,
