@@ -15,11 +15,14 @@ pub struct Settings {
     pub loader_sources: Vec<LoaderSource>,
     /// The person's own CurseForge API key, from console.curseforge.com.
     pub curseforge_api_key: String,
+    /// On tiling compositors such as Hyprland, where windows have no title bar: show
+    /// Clover's own Full Screen and Quit buttons anyway.
+    pub show_window_buttons: bool,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { java_path: String::new(), memory_mb: 4096, loader_sources: vec![], curseforge_api_key: String::new() }
+        Self { java_path: String::new(), memory_mb: 4096, loader_sources: vec![], curseforge_api_key: String::new(), show_window_buttons: false }
     }
 }
 

@@ -32,7 +32,11 @@
   --radius-control: 6px;
   --radius-panel: 10px;
   --toolbar-height: 52px;
-  /* Room for the traffic lights when the title bar overlays content. */
+  /* Room for the traffic lights, which only macOS draws over the content. */
+  --traffic-lights: 12px;
+}
+
+:root[data-platform="macos"] {
   --traffic-lights: 78px;
 }
 

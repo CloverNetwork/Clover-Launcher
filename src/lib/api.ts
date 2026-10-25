@@ -29,7 +29,11 @@ export type Settings = {
   memoryMb: number;
   loaderSources: LoaderSource[];
   curseforgeApiKey: string;
+  /** On Hyprland, where windows have no title bar: show Clover's own window buttons. */
+  showWindowButtons: boolean;
 };
+/** How windows are framed: on Hyprland they have no title bar. */
+export type WindowChrome = { hyprland: boolean; buttons: boolean };
 export type ModSource = "modrinth" | "curseforge";
 export type ModHit = {
   source: ModSource;
@@ -145,6 +149,8 @@ export const api = {
   /** Development builds only; release builds refuse it. */
   signInOffline: (name: string) => invoke<Accounts>("sign_in_offline", { name }),
   openSettings: () => invoke<void>("open_settings"),
+  windowChrome: () => invoke<WindowChrome>("window_chrome"),
+  quit: () => invoke<void>("quit"),
   /** `null` for offline accounts, which have no skins on Mojang's servers. */
   getWardrobe: () => invoke<Wardrobe | null>("get_wardrobe"),
   listSkinLibrary: () => invoke<LibrarySkin[]>("list_skin_library"),
@@ -167,6 +173,7 @@ export const events = {
   gameExit: (fn: (x: GameExit) => void) => listen<GameExit>("game-exit", (e) => fn(e.payload)),
   /** A new launch started this instance's log over. */
   importProgress: (fn: (p: ImportProgress) => void) => listen<ImportProgress>("import-progress", (e) => fn(e.payload)),
+  windowChrome: (fn: (c: WindowChrome) => void) => listen<WindowChrome>("window-chrome", (e) => fn(e.payload)),
   logPoppedIn: (fn: (instanceId: string) => void) => listen<string>("log-popped-in", (e) => fn(e.payload)),
   gameLogCleared: (fn: (instanceId: string) => void) => listen<string>("game-log-cleared", (e) => fn(e.payload)),
   menu: (fn: (id: string) => void) => listen<string>("menu-command", (e) => fn(e.payload)),

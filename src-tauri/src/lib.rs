@@ -1,5 +1,6 @@
 //! The Tauri front end: commands the windows call, built on clover-core.
 
+mod chrome;
 mod events;
 mod menu;
 
@@ -13,7 +14,7 @@ use clover_core::paths::Paths;
 use clover_core::settings::{self, Settings};
 use clover_core::{auth, install, launch, mclogs, modpacks, mods, skins};
 use reqwest::Client;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_opener::OpenerExt;
 
 use crate::events::{AppReporter, ImportReporter};
@@ -315,10 +316,26 @@ fn get_settings(state: State<'_, AppState>) -> Settings {
 }
 
 #[tauri::command]
-fn save_settings(state: State<'_, AppState>, settings: Settings) -> Result<()> {
+fn save_settings(app: AppHandle, state: State<'_, AppState>, settings: Settings) -> Result<()> {
     // Loader sources change only through their own commands, so a stale copy can't drop one.
     let current = settings::load(&state.paths);
-    settings::save(&state.paths, &Settings { loader_sources: current.loader_sources, ..settings })
+    let settings = Settings { loader_sources: current.loader_sources, ..settings };
+    settings::save(&state.paths, &settings)?;
+    if settings.show_window_buttons != current.show_window_buttons {
+        let _ = app.emit("window-chrome", chrome::current(&settings));
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn window_chrome(state: State<'_, AppState>) -> chrome::WindowChrome {
+    chrome::current(&settings::load(&state.paths))
+}
+
+/// The Quit button on title-bar-less windows: closes every window, like ⌘Q.
+#[tauri::command]
+fn quit(app: AppHandle) {
+    app.exit(0);
 }
 
 #[tauri::command]
@@ -462,6 +479,11 @@ pub fn run() {
             app.set_menu(menu::build(app.handle(), &auth::accounts(&paths))?)?;
             app.manage(AppState { paths, http, sessions: auth::SessionCache::default() });
             app.on_menu_event(|app, event| menu::handle(app, event.id().as_ref()));
+            if !chrome::decorated() {
+                if let Some(main) = app.get_webview_window("main") {
+                    main.set_decorations(false)?;
+                }
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -503,6 +525,8 @@ pub fn run() {
             finish_sign_in,
             sign_in_offline,
             open_settings,
+            window_chrome,
+            quit,
             get_wardrobe,
             list_skin_library,
             add_skin_to_library,

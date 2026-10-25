@@ -2,7 +2,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { openUrl } from "@tauri-apps/plugin-opener";
-  import { api, CURSEFORGE_KEY_FORM, errorText, type LoaderSource, type Settings } from "$lib/api";
+  import { api, CURSEFORGE_KEY_FORM, errorText, type LoaderSource, type Settings, type WindowChrome } from "$lib/api";
+  import WindowControls from "$lib/components/WindowControls.svelte";
 
   let settings = $state<Settings | null>(null);
   let error = $state<string | null>(null);
@@ -27,7 +28,10 @@
     }
   }
 
+  let chrome = $state<WindowChrome | null>(null);
+
   onMount(async () => {
+    chrome = await api.windowChrome();
     const loaded = await api.getSettings();
     // "java" meant "whatever is on the PATH" before automatic Java existed.
     if (loaded.javaPath.trim() === "java") loaded.javaPath = "";
@@ -69,6 +73,7 @@
 
 {#if settings}
   <div class="window">
+    <div class="window-controls"><WindowControls /></div>
     <form class="settings" onsubmit={(e) => e.preventDefault()}>
       <label for="java">Java:</label>
       <div>
@@ -136,6 +141,20 @@
         </p>
       </div>
 
+      {#if chrome?.hyprland}
+        <span class="label">Window:</span>
+        <div>
+          <label class="checkbox">
+            <input type="checkbox" bind:checked={settings.showWindowButtons} onchange={save} />
+            Show Full Screen and Quit buttons
+          </label>
+          <p class="hint secondary">
+            Hyprland arranges windows with your keybindings, so Clover's windows have no title bar. Turn this on to add
+            buttons for full screen and quitting. There's no minimize button, since Hyprland doesn't minimize windows.
+          </p>
+        </div>
+      {/if}
+
       {#if error}
         <p class="error" role="alert">{error}</p>
       {/if}
@@ -197,8 +216,30 @@
 
 <style>
   .window {
+    position: relative;
     height: 100vh;
     overflow-y: auto;
+  }
+
+  .window-controls {
+    position: absolute;
+    top: 8px;
+    right: 10px;
+  }
+
+  .label {
+    text-align: right;
+  }
+
+  .checkbox {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    text-align: left;
+  }
+
+  .checkbox input {
+    margin: 0;
   }
 
   .settings,

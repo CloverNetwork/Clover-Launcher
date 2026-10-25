@@ -15,6 +15,7 @@
   import ModBrowserSheet from "$lib/components/ModBrowserSheet.svelte";
   import Sidebar from "$lib/components/Sidebar.svelte";
   import WardrobeSheet from "$lib/components/WardrobeSheet.svelte";
+  import WindowControls from "$lib/components/WindowControls.svelte";
 
   const menuActions: Record<string, () => void> = {
     new_instance: () => (launcher.newInstanceOpen = true),
@@ -164,6 +165,7 @@
           </svg>
         {/if}
       </button>
+      <WindowControls quits />
     </header>
 
     {#if showingDetail && launcher.selected}

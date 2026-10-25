@@ -3,6 +3,7 @@
   import { openUrl } from "@tauri-apps/plugin-opener";
   import { api, errorText } from "$lib/api";
   import Icon from "./Icon.svelte";
+  import WindowControls from "./WindowControls.svelte";
 
   let {
     instanceId,
@@ -103,6 +104,9 @@
       <button class="icon-button" aria-label="Show in Main Window" title="Show in Main Window" onclick={onPopIn}>
         <Icon name="popin" size={14} />
       </button>
+    {/if}
+    {#if standalone}
+      <WindowControls />
     {/if}
   </header>
   <!-- Focusable so the log can be scrolled from the keyboard. -->

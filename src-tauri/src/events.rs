@@ -46,6 +46,7 @@ pub fn open_log_window(app: &AppHandle, instance_id: &str, name: &str) -> tauri:
         .title(format!("{name} — Game Log"))
         .inner_size(760.0, 480.0)
         .min_inner_size(420.0, 240.0)
+        .decorations(crate::chrome::decorated())
         .build()?;
     Ok(())
 }

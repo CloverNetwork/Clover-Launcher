@@ -100,5 +100,6 @@ pub fn open_settings(app: &AppHandle) {
         .resizable(false)
         .minimizable(false)
         .maximizable(false)
+        .decorations(crate::chrome::decorated())
         .build();
 }
