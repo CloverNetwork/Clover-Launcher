@@ -28,3 +28,8 @@ Debug builds have an offline account for testing in the meantime.
 Java is picked per version. If the right one isn't installed, Clover downloads Mojang's
 runtime into its data folder. On Apple silicon, old versions that need Java 8 run under Rosetta.
 You can set one Java for everything in Settings.
+
+CurseForge mods need an API key approved for third-party apps
+([apply here](https://forms.monday.com/forms/dce5ccb7afda9a1c21dab1a1aa1d84eb?r=use1)). Paste it in
+Settings, or build it in with `CURSEFORGE_API_KEY='...' pnpm tauri build`. Use single quotes,
+because keys contain `$`.

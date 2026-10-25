@@ -116,9 +116,8 @@ impl Sites<'_> {
 async fn json(request: RequestBuilder) -> Result<Value> {
     let res = request.send().await?;
     match res.status().as_u16() {
-        403 if res.url().host_str() == Some("api.curseforge.com") => {
-            Err(msg("CurseForge didn't accept the API key. Check it in Settings."))
-        }
+        // The hint about approved third-party keys sits next to wherever this shows.
+        403 if res.url().host_str() == Some("api.curseforge.com") => Err(msg("CurseForge rejected the API key.")),
         429 => Err(msg("Too many requests for now. Wait a moment and try again.")),
         _ => Ok(res.error_for_status()?.json().await?),
     }
@@ -126,6 +125,16 @@ async fn json(request: RequestBuilder) -> Result<Value> {
 
 fn text(value: &Value, key: &str) -> String {
     value[key].as_str().unwrap_or_default().to_string()
+}
+
+/// Whether CurseForge accepts a key, checked with its cheapest request.
+pub async fn check_curseforge_key(client: &Client, key: &str) -> Result<()> {
+    let key = key.trim();
+    if key.is_empty() {
+        return Err(msg("Enter a key first."));
+    }
+    let sites = Sites { client, curseforge_key: Some(key) };
+    json(sites.curseforge(format!("{CURSEFORGE}/games/{CURSEFORGE_MINECRAFT}"))?).await.map(|_| ())
 }
 
 pub async fn search(sites: &Sites<'_>, target: &Target, source: Source, query: &str, offset: u32) -> Result<SearchPage> {
@@ -455,6 +464,14 @@ mod tests {
     fn vanilla_has_no_mod_target() {
         assert!(Target::for_instance(&instance("vanilla")).is_err());
         assert_eq!(Target::for_instance(&instance("quilt")).unwrap().modrinth_loaders, ["quilt", "fabric"]);
+    }
+
+    /// CurseForge answers an unapproved key with a bare 403; the check should explain it.
+    #[tokio::test]
+    #[ignore]
+    async fn rejects_an_unapproved_curseforge_key() {
+        let error = check_curseforge_key(&Client::new(), "$2a$10$not-a-real-key").await.unwrap_err().to_string();
+        assert!(error.contains("rejected"), "{error}");
     }
 
     /// Installs Iris from Modrinth, which requires Sodium, then disables and removes it.

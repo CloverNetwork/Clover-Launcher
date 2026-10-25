@@ -1,7 +1,8 @@
 <!-- The settings window (⌘,). Changes apply immediately; there is no Save button. -->
 <script lang="ts">
   import { onMount } from "svelte";
-  import { api, errorText, type LoaderSource, type Settings } from "$lib/api";
+  import { openUrl } from "@tauri-apps/plugin-opener";
+  import { api, CURSEFORGE_KEY_FORM, errorText, type LoaderSource, type Settings } from "$lib/api";
 
   let settings = $state<Settings | null>(null);
   let error = $state<string | null>(null);
@@ -11,6 +12,20 @@
   let sourceUrl = $state("");
   let sourcePath = $state("");
   let sourceError = $state<string | null>(null);
+  let keyCheck = $state<{ ok: boolean; text: string } | null>(null);
+  let checkingKey = $state(false);
+
+  async function checkKey() {
+    checkingKey = true;
+    try {
+      await api.checkCurseforgeKey(settings!.curseforgeApiKey);
+      keyCheck = { ok: true, text: "CurseForge accepted this key." };
+    } catch (e) {
+      keyCheck = { ok: false, text: errorText(e) };
+    } finally {
+      checkingKey = false;
+    }
+  }
 
   onMount(async () => {
     const loaded = await api.getSettings();
@@ -92,18 +107,32 @@
 
       <label for="curseforge">CurseForge:</label>
       <div>
-        <input
-          id="curseforge"
-          class="field"
-          type="password"
-          bind:value={settings.curseforgeApiKey}
-          oninput={save}
-          placeholder="API key"
-          spellcheck="false"
-          autocomplete="off"
-        />
+        <div class="key-row">
+          <input
+            id="curseforge"
+            class="field"
+            type="password"
+            bind:value={settings.curseforgeApiKey}
+            oninput={() => {
+              keyCheck = null;
+              save();
+            }}
+            placeholder="API key"
+            spellcheck="false"
+            autocomplete="off"
+          />
+          <button type="button" class="button" disabled={checkingKey || !settings.curseforgeApiKey.trim()} onclick={checkKey}>
+            {checkingKey ? "Checking…" : "Check Key"}
+          </button>
+        </div>
+        {#if keyCheck}
+          <p class="hint" class:ok={keyCheck.ok} class:bad={!keyCheck.ok} role="status">{keyCheck.text}</p>
+        {/if}
         <p class="hint secondary">
-          Needed to add mods from CurseForge. Get a free key at console.curseforge.com. Modrinth works without one.
+          Needed only for CurseForge mods; Modrinth works without one. CurseForge gives launchers access through a key
+          approved for third-party apps, which you
+          <button type="button" class="inline-link" onclick={() => openUrl(CURSEFORGE_KEY_FORM)}>apply for here</button>.
+          Personal keys from the CurseForge console usually aren't accepted.
         </p>
       </div>
 
@@ -191,6 +220,35 @@
   .hint {
     margin: 4px 0 0;
     font-size: 11px;
+  }
+
+  .key-row {
+    display: flex;
+    gap: 8px;
+  }
+
+  .key-row .field {
+    flex: 1;
+  }
+
+  .hint.ok {
+    color: var(--play);
+  }
+
+  .hint.bad {
+    color: var(--danger);
+  }
+
+  .inline-link {
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--accent);
+    font-size: inherit;
+  }
+
+  .inline-link:hover {
+    text-decoration: underline;
   }
 
   .slider {

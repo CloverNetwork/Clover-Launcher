@@ -197,6 +197,11 @@ async fn search_mods(
 }
 
 #[tauri::command]
+async fn check_curseforge_key(state: State<'_, AppState>, key: String) -> Result<()> {
+    mods::check_curseforge_key(&state.http, &key).await
+}
+
+#[tauri::command]
 fn list_mods(state: State<'_, AppState>, id: String) -> Result<Vec<mods::InstalledMod>> {
     mods::installed(&state.paths, &instances::get(&state.paths, &id)?)
 }
@@ -438,6 +443,7 @@ pub fn run() {
             game_log,
             search_mods,
             list_mods,
+            check_curseforge_key,
             install_mod,
             set_mod_enabled,
             remove_mod,

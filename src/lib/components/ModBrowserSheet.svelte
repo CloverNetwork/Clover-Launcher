@@ -1,7 +1,7 @@
 <!-- Search Modrinth or CurseForge for mods that fit the instance's game version and loader. -->
 <script lang="ts">
   import { openUrl } from "@tauri-apps/plugin-opener";
-  import { api, errorText, type ModHit, type ModSource } from "$lib/api";
+  import { api, CURSEFORGE_KEY_FORM, errorText, type ModHit, type ModSource } from "$lib/api";
   import { launcher } from "$lib/launcher.svelte";
   import Icon from "./Icon.svelte";
 
@@ -115,9 +115,13 @@
   <div class="results" aria-busy={loading}>
     {#if needsKey}
       <div class="message">
-        <p>CurseForge only lets apps search with an API key. Get a free key from the CurseForge console, then paste it in Settings.</p>
+        <p>{error}</p>
+        <p class="secondary small">
+          CurseForge only serves launchers that have a key approved for third-party apps. Apply for one, then paste it
+          in Settings. Modrinth works without a key.
+        </p>
         <div class="message-actions">
-          <button class="button" onclick={() => openUrl("https://console.curseforge.com/")}>Get a Key</button>
+          <button class="button" onclick={() => openUrl(CURSEFORGE_KEY_FORM)}>Apply for a Key</button>
           <button class="button default" onclick={() => api.openSettings()}>Open Settings</button>
         </div>
       </div>
@@ -329,6 +333,10 @@
   .message p {
     margin: 0 auto 12px;
     max-width: 420px;
+  }
+
+  .message .small {
+    font-size: 12px;
   }
 
   .message-actions {

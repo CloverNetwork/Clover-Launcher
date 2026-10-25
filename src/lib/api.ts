@@ -42,6 +42,8 @@ export type ModHit = {
   pageUrl: string;
 };
 export type ModPage = { hits: ModHit[]; total: number };
+/** Where launchers apply for a third-party CurseForge API key. */
+export const CURSEFORGE_KEY_FORM = "https://forms.monday.com/forms/dce5ccb7afda9a1c21dab1a1aa1d84eb?r=use1";
 export type InstalledMod = {
   file: string;
   title: string;
@@ -93,6 +95,8 @@ export const api = {
   searchMods: (id: string, source: ModSource, query: string, offset: number) =>
     invoke<ModPage>("search_mods", { id, source, query, offset }),
   listMods: (id: string) => invoke<InstalledMod[]>("list_mods", { id }),
+  /** Rejects with CurseForge's reason when the key doesn't work. */
+  checkCurseforgeKey: (key: string) => invoke<void>("check_curseforge_key", { key }),
   /** Resolves to the titles of everything added, dependencies included. */
   installMod: (id: string, source: ModSource, project: string) => invoke<string[]>("install_mod", { id, source, project }),
   setModEnabled: (id: string, file: string, enabled: boolean) => invoke<void>("set_mod_enabled", { id, file, enabled }),
