@@ -3,6 +3,8 @@
   const paths = {
     plus: "M8 3.5v9M3.5 8h9",
     sidebar: "M2.5 3.5h11v9h-11zM6 3.5v9",
+    grid: "M2.5 2.5h4.5v4.5h-4.5zM9 2.5h4.5v4.5H9zM2.5 9h4.5v4.5h-4.5zM9 9h4.5v4.5H9z",
+    back: "M10 3.5L5.5 8l4.5 4.5",
     play: "M5 3.2v9.6L12.5 8z",
     stop: "M4.5 4.5h7v7h-7z",
     folder: "M2.5 4.5a1 1 0 0 1 1-1h2.8l1.4 1.5h4.8a1 1 0 0 1 1 1v5.5a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1z",

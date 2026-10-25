@@ -9,6 +9,7 @@
   import GameLog from "$lib/components/GameLog.svelte";
   import Icon from "$lib/components/Icon.svelte";
   import InstanceDetail from "$lib/components/InstanceDetail.svelte";
+  import InstanceGrid from "$lib/components/InstanceGrid.svelte";
   import NewInstanceSheet from "$lib/components/NewInstanceSheet.svelte";
   import Sidebar from "$lib/components/Sidebar.svelte";
   import WardrobeSheet from "$lib/components/WardrobeSheet.svelte";
@@ -19,7 +20,9 @@
     stop: () => launcher.stop(),
     show_folder: () => launcher.showFolder(),
     delete_instance: () => launcher.remove(),
-    toggle_sidebar: () => (launcher.sidebarVisible = !launcher.sidebarVisible),
+    toggle_sidebar: () => launcher.layout === "sidebar" && (launcher.sidebarVisible = !launcher.sidebarVisible),
+    view_sidebar: () => launcher.setLayout("sidebar"),
+    view_grid: () => launcher.setLayout("grid"),
     toggle_log: () => (launcher.logVisible = !launcher.logVisible),
     verify_files: () => launcher.verify(),
     add_account: () => (launcher.accountOpen = true),
@@ -63,6 +66,18 @@
     await menu.popup(new LogicalPosition(rect.left, rect.bottom + 4));
   }
 
+  const grid = $derived(launcher.layout === "grid");
+  const sidebarShown = $derived(!grid && launcher.sidebarVisible);
+  /** The instance page is showing: always in the sidebar layout, on demand in the grid. */
+  const showingDetail = $derived(!!launcher.selected && (!grid || launcher.detailOpen));
+
+  function onKeydown(e: KeyboardEvent) {
+    // Escape leaves an instance's page in the grid layout, unless a sheet has it.
+    if (e.key === "Escape" && grid && launcher.detailOpen && !document.querySelector("dialog[open]")) {
+      launcher.detailOpen = false;
+    }
+  }
+
   onMount(() => {
     document.body.classList.add("vibrant");
     launcher.init();
@@ -81,14 +96,16 @@
   });
 </script>
 
+<svelte:window onkeydown={onKeydown} />
+
 <div class="window">
-  {#if launcher.sidebarVisible}
+  {#if sidebarShown}
     <Sidebar />
   {/if}
 
-  <main class:sidebar-hidden={!launcher.sidebarVisible}>
+  <main class:sidebar-hidden={!sidebarShown}>
     <header class="toolbar" data-tauri-drag-region>
-      {#if !launcher.sidebarVisible}
+      {#if !grid && !launcher.sidebarVisible}
         <button
           class="icon-button"
           aria-label="Show Sidebar"
@@ -98,8 +115,28 @@
           <Icon name="sidebar" />
         </button>
       {/if}
+      {#if grid && launcher.detailOpen}
+        <button class="back" onclick={() => (launcher.detailOpen = false)}>
+          <Icon name="back" />
+          All Instances
+        </button>
+      {/if}
       <div class="spacer" data-tauri-drag-region></div>
-      {#if launcher.selected}
+      <div class="view-switch" role="radiogroup" aria-label="View instances as">
+        <button
+          role="radio"
+          aria-checked={!grid}
+          aria-label="Sidebar"
+          title="View as Sidebar (⌘1)"
+          onclick={() => launcher.setLayout("sidebar")}
+        >
+          <Icon name="sidebar" />
+        </button>
+        <button role="radio" aria-checked={grid} aria-label="Grid" title="View as Grid (⌘2)" onclick={() => launcher.setLayout("grid")}>
+          <Icon name="grid" />
+        </button>
+      </div>
+      {#if showingDetail}
         <button
           class="icon-button"
           aria-label="Game Log"
@@ -126,11 +163,13 @@
       </button>
     </header>
 
-    {#if launcher.selected}
+    {#if showingDetail && launcher.selected}
       <InstanceDetail instance={launcher.selected} />
       {#if launcher.logVisible}
         <GameLog lines={launcher.logs[launcher.selected.id] ?? []} />
       {/if}
+    {:else if grid && launcher.instances.length}
+      <InstanceGrid />
     {:else}
       <div class="empty">
         <span class="logo"><CloverLogo size={56} /></span>
@@ -171,6 +210,49 @@
 
   main.sidebar-hidden .toolbar {
     padding-left: var(--traffic-lights);
+  }
+
+  .back {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    height: 28px;
+    padding: 0 10px 0 4px;
+    border: none;
+    border-radius: var(--radius-control);
+    background: transparent;
+    color: var(--text-secondary);
+    font-weight: 500;
+  }
+
+  .back:hover {
+    background: var(--bg-control-hover);
+    color: var(--text);
+  }
+
+  .view-switch {
+    display: inline-flex;
+    margin-right: 4px;
+    padding: 2px;
+    border-radius: var(--radius-control);
+    background: var(--bg-control);
+  }
+
+  .view-switch button {
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 22px;
+    border: none;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--text-secondary);
+  }
+
+  .view-switch button[aria-checked="true"] {
+    background: var(--bg-segment-selected);
+    color: var(--text);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
   }
 
   .spacer {

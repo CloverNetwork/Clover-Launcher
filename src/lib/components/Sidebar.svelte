@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { Menu } from "@tauri-apps/api/menu";
   import { launcher } from "$lib/launcher.svelte";
   import BlockIcon from "./BlockIcon.svelte";
   import Icon from "./Icon.svelte";
@@ -16,24 +15,6 @@
     list?.querySelector<HTMLElement>(`[data-id="${launcher.selectedId}"]`)?.scrollIntoView({ block: "nearest" });
   }
 
-  async function showContextMenu(e: MouseEvent, id: string) {
-    e.preventDefault();
-    launcher.selectedId = id;
-    const running = launcher.activity[id] === "running";
-    const menu = await Menu.new({
-      items: [
-        running
-          ? { id: "stop", text: "Stop", action: () => launcher.stop(id) }
-          : { id: "play", text: "Play", enabled: !launcher.activity[id], action: () => launcher.play(id) },
-        { item: "Separator" },
-        { id: "show", text: "Show in Finder", action: () => launcher.showFolder(id) },
-        { id: "verify", text: "Verify Game Files", enabled: !launcher.activity[id], action: () => launcher.verify(id) },
-        { item: "Separator" },
-        { id: "delete", text: "Delete Instance…", enabled: !running, action: () => launcher.remove(id) },
-      ],
-    });
-    await menu.popup();
-  }
 </script>
 
 <nav class="sidebar" aria-label="Instances">
@@ -80,7 +61,7 @@
           aria-selected={instance.id === launcher.selectedId}
           onclick={() => (launcher.selectedId = instance.id)}
           ondblclick={() => launcher.play(instance.id)}
-          oncontextmenu={(e) => showContextMenu(e, instance.id)}
+          oncontextmenu={(e) => launcher.showInstanceMenu(e, instance.id)}
         >
           <BlockIcon seed={instance.id} size={18} />
           <span class="name">{instance.name}</span>

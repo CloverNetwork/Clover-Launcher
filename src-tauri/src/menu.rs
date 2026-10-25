@@ -36,6 +36,9 @@ pub fn build(app: &AppHandle, accounts: &Accounts) -> tauri::Result<Menu<Wry>> {
         .build()?;
     let edit = SubmenuBuilder::new(app, "Edit").undo().redo().separator().cut().copy().paste().select_all().build()?;
     let view = SubmenuBuilder::new(app, "View")
+        .item(&item("view_sidebar", "as Sidebar", Some("CmdOrCtrl+1"))?)
+        .item(&item("view_grid", "as Grid", Some("CmdOrCtrl+2"))?)
+        .separator()
         .item(&item("toggle_sidebar", "Toggle Sidebar", Some("CmdOrCtrl+Ctrl+S"))?)
         .item(&item("toggle_log", "Toggle Game Log", Some("CmdOrCtrl+L"))?)
         .separator()

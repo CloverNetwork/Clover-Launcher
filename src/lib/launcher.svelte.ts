@@ -1,7 +1,20 @@
+import { Menu } from "@tauri-apps/api/menu";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { api, errorText, events, type Accounts, type Instance, type LoaderSource, type Profile } from "./api";
 
 const MAX_LOG_LINES = 2000;
+const LAYOUT_KEY = "clover.layout";
+
+export type Layout = "sidebar" | "grid";
+
+/** The layout is a per-computer view preference, so it lives in local storage. */
+function storedLayout(): Layout {
+  try {
+    return localStorage.getItem(LAYOUT_KEY) === "grid" ? "grid" : "sidebar";
+  } catch {
+    return "sidebar";
+  }
+}
 
 type Activity = "verifying" | "launching" | "running";
 
@@ -20,6 +33,9 @@ class Launcher {
   /** A short confirmation shown in the status line, such as the result of verifying files. */
   notice = $state<{ instanceId: string; message: string } | null>(null);
 
+  layout = $state<Layout>(storedLayout());
+  /** In the grid layout, whether the selected instance's page is open over the grid. */
+  detailOpen = $state(false);
   sidebarVisible = $state(true);
   logVisible = $state(false);
   newInstanceOpen = $state(false);
@@ -71,6 +87,42 @@ class Launcher {
     return `${name} ${version}`.trim();
   }
 
+  setLayout(layout: Layout) {
+    this.layout = layout;
+    this.detailOpen = false;
+    try {
+      localStorage.setItem(LAYOUT_KEY, layout);
+    } catch {
+      // Private storage just means the choice isn't remembered.
+    }
+  }
+
+  /** Opens an instance: in the grid layout that shows its page, in the sidebar it selects it. */
+  open(id: string) {
+    this.selectedId = id;
+    if (this.layout === "grid") this.detailOpen = true;
+  }
+
+  /** The right-click menu for an instance, shared by the sidebar and the grid. */
+  async showInstanceMenu(e: MouseEvent, id: string) {
+    e.preventDefault();
+    this.selectedId = id;
+    const running = this.activity[id] === "running";
+    const menu = await Menu.new({
+      items: [
+        running
+          ? { id: "stop", text: "Stop", action: () => this.stop(id) }
+          : { id: "play", text: "Play", enabled: !this.activity[id], action: () => this.play(id) },
+        { item: "Separator" },
+        { id: "show", text: "Show in Finder", action: () => this.showFolder(id) },
+        { id: "verify", text: "Verify Game Files", enabled: !this.activity[id], action: () => this.verify(id) },
+        { item: "Separator" },
+        { id: "delete", text: "Delete Instance…", enabled: !running, action: () => this.remove(id) },
+      ],
+    });
+    await menu.popup();
+  }
+
   replace(instance: Instance) {
     this.instances = this.instances.map((i) => (i.id === instance.id ? instance : i));
   }
@@ -85,7 +137,7 @@ class Launcher {
 
   private async select(instance: Instance) {
     await this.reload();
-    this.selectedId = instance.id;
+    this.open(instance.id);
   }
 
   async play(id = this.selectedId) {
@@ -124,6 +176,7 @@ class Launcher {
     try {
       await api.deleteInstance(instance.id);
       await this.reload();
+      this.detailOpen = false;
     } catch (e) {
       this.error = { instanceId: instance.id, message: errorText(e) };
     }
