@@ -515,6 +515,8 @@ pub fn run() {
         )
         .manage(PendingLaunch(std::sync::Mutex::new(shortcuts::launch_arg(std::env::args()))))
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(Running::default())
         .manage(GameLogs::default())

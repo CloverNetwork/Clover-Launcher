@@ -23,6 +23,25 @@ pnpm tauri dev
 The launcher itself lives in `crates/clover-core`, a plain Rust library with no UI.
 `src-tauri` and `src` are the app on top of it. `cargo test --workspace` runs the tests.
 
+## Releasing
+
+Pushing a version tag builds Clover for macOS, Windows and Linux and attaches the installers
+to a draft GitHub release:
+
+```
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+Bump the version in `package.json`, `Cargo.toml` and `src-tauri/tauri.conf.json` first.
+Installed copies update themselves from the latest published release, so publish the draft
+when it's ready.
+
+The repository needs two secrets, from `pnpm tauri signer generate`:
+`TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Updates signed with any
+other key are refused. macOS builds are unsigned until Apple Developer ID secrets are added
+(see the workflow file).
+
 ## Notes
 
 Sign-in uses the Azure app ID in `crates/clover-core/src/auth.rs`. It needs "Allow public client

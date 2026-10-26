@@ -24,6 +24,7 @@ pub fn build(app: &AppHandle, accounts: &Accounts) -> tauri::Result<Menu<Wry>> {
     let app_menu = SubmenuBuilder::new(app, "Clover Launcher")
         .about(Some(AboutMetadata::default()))
         .separator()
+        .item(&item("check_updates", "Check for Updates…", None)?)
         .item(&item("settings", "Settings…", Some("CmdOrCtrl+,"))?)
         .separator()
         .services()

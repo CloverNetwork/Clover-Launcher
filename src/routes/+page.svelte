@@ -17,10 +17,12 @@
   import WardrobeSheet from "$lib/components/WardrobeSheet.svelte";
   import WindowControls from "$lib/components/WindowControls.svelte";
   import { commandKey, hasMenuBar, SETTINGS } from "$lib/platform";
+  import { updates } from "$lib/updates.svelte";
 
   const menuActions: Record<string, () => void> = {
     new_instance: () => (launcher.newInstanceOpen = true),
     import_modpack: () => (launcher.importOpen = true),
+    check_updates: () => updates.check(true),
     play: () => launcher.play(),
     stop: () => launcher.stop(),
     show_folder: () => launcher.showFolder(),
@@ -117,6 +119,7 @@
   onMount(() => {
     document.body.classList.add("vibrant");
     launcher.init();
+    updates.check();
     const unlisten = events.menu(onMenuCommand);
 
     // Collapse the sidebar when the window gets narrow, and bring it back when it widens.
@@ -181,6 +184,13 @@
           onclick={() => (launcher.logVisible = !launcher.logVisible)}
         >
           <Icon name="log" />
+        </button>
+      {/if}
+      {#if updates.available}
+        <button class="update-pill" onclick={() => updates.offer()} disabled={updates.progress !== null}>
+          {updates.progress === null
+            ? `Update to ${updates.available.version}`
+            : `Updating ${Math.round(updates.progress * 100)}%`}
         </button>
       {/if}
       {#if !hasMenuBar}
@@ -322,6 +332,22 @@
     background: transparent;
     color: var(--text-secondary);
     font-weight: 500;
+  }
+
+  .update-pill {
+    height: 24px;
+    padding: 0 10px;
+    border: 1px solid var(--accent);
+    border-radius: 12px;
+    background: transparent;
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .update-pill:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
   }
 
   .chevron {

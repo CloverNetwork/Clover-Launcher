@@ -4,6 +4,8 @@
   import { openUrl } from "@tauri-apps/plugin-opener";
   import { api, CURSEFORGE_KEY_FORM, errorText, type LoaderSource, type Settings, type WindowChrome } from "$lib/api";
   import WindowControls from "$lib/components/WindowControls.svelte";
+  import { getVersion } from "@tauri-apps/api/app";
+  import { updates } from "$lib/updates.svelte";
 
   let settings = $state<Settings | null>(null);
   let error = $state<string | null>(null);
@@ -29,9 +31,11 @@
   }
 
   let chrome = $state<WindowChrome | null>(null);
+  let version = $state("");
 
   onMount(async () => {
     chrome = await api.windowChrome();
+    version = await getVersion();
     const loaded = await api.getSettings();
     // "java" meant "whatever is on the PATH" before automatic Java existed.
     if (loaded.javaPath.trim() === "java") loaded.javaPath = "";
@@ -154,6 +158,12 @@
           </p>
         </div>
       {/if}
+
+      <span class="label">Version:</span>
+      <div class="key-row">
+        <span>Clover {version}</span>
+        <button type="button" class="button" onclick={() => updates.check(true)}>Check for Updates</button>
+      </div>
 
       {#if error}
         <p class="error" role="alert">{error}</p>
