@@ -12,7 +12,9 @@
   let offlineName = $state("");
 
   /** Offline accounts are for testing before Microsoft approves the app; release builds don't offer them. */
-  const offlineAllowed = import.meta.env.DEV;
+  // The Rust side decides, since only development builds of it accept offline accounts.
+  let offlineAllowed = $state(false);
+  api.developmentBuild().then((dev) => (offlineAllowed = dev), () => {});
   const validOfflineName = $derived(/^[A-Za-z0-9_]{3,16}$/.test(offlineName.trim()));
 
   async function signInOffline(e: SubmitEvent) {

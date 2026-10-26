@@ -237,6 +237,8 @@ export const api = {
   beginSignIn: () => invoke<DeviceCode>("begin_sign_in"),
   finishSignIn: (code: DeviceCode) => invoke<Accounts>("finish_sign_in", { code }),
   /** Development builds only; release builds refuse it. */
+  /** True in development builds: offline accounts work and update checks are skipped. */
+  developmentBuild: () => invoke<boolean>("development_build"),
   signInOffline: (name: string) => invoke<Accounts>("sign_in_offline", { name }),
   openSettings: () => invoke<void>("open_settings"),
   windowChrome: () => invoke<WindowChrome>("window_chrome"),

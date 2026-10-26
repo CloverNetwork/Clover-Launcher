@@ -6,7 +6,7 @@ import { getVersion } from "@tauri-apps/api/app";
 import { ask, message } from "@tauri-apps/plugin-dialog";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check, type Update } from "@tauri-apps/plugin-updater";
-import { errorText } from "./api";
+import { api, errorText } from "./api";
 import { t } from "./i18n";
 
 class Updates {
@@ -16,7 +16,7 @@ class Updates {
 
   /** `manual` reports "up to date" and errors; the launch check stays quiet. */
   async check(manual = false) {
-    if (import.meta.env.DEV && !manual) return;
+    if (!manual && (import.meta.env.DEV || (await api.developmentBuild().catch(() => false)))) return;
     try {
       this.available = await check();
       if (this.available && manual) await this.offer();

@@ -653,6 +653,12 @@ async fn finish_sign_in(app: AppHandle, state: State<'_, AppState>, code: auth::
     accounts_changed(&app, &state.paths)
 }
 
+/// Whether this is a development build, which allows offline accounts and skips update checks.
+#[tauri::command]
+fn development_build() -> bool {
+    auth::OFFLINE_ALLOWED
+}
+
 #[tauri::command]
 fn sign_in_offline(app: AppHandle, state: State<'_, AppState>, name: String) -> Result<auth::Accounts> {
     auth::sign_in_offline(&state.paths, &name)?;
@@ -844,6 +850,7 @@ pub fn run() {
             get_instance,
             set_language,
             has_shortcut,
+            development_build,
             remove_shortcut,
             save_server,
             remove_server,
