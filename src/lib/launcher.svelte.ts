@@ -1,7 +1,7 @@
 import { Menu } from "@tauri-apps/api/menu";
 import { ask, message, save } from "@tauri-apps/plugin-dialog";
 import { DELETE_INSTANCE, SHORTCUT_LABEL, SHOW_FOLDER, TRASH } from "./platform";
-import { api, errorText, events, type Accounts, type Instance, type LoaderSource, type Place, type Profile, type World } from "./api";
+import { api, errorText, events, type Accounts, type Instance, type LoaderSource, type CrashFinding, type Place, type Profile, type World } from "./api";
 
 const MAX_LOG_LINES = 2000;
 
@@ -48,6 +48,8 @@ class Launcher {
   error = $state<{ instanceId: string; message: string } | null>(null);
   /** A short confirmation shown in the status line, such as the result of verifying files. */
   notice = $state<{ instanceId: string; message: string } | null>(null);
+  /** Likely causes of the last crash, with what happened to each fix by its index. */
+  crash = $state<{ instanceId: string; findings: CrashFinding[]; done: Record<number, string> } | null>(null);
 
   layout = $state<Layout>(storedLayout());
   /** In the grid layout, whether the selected instance's page is open over the grid. */
@@ -136,6 +138,7 @@ class Launcher {
         if (code !== null && code !== 0) {
           this.error = { instanceId, message: `Minecraft quit unexpectedly (exit code ${code}). The game log has details.` };
           this.logVisible = true;
+          this.explainCrash(instanceId);
         }
       }),
     ]);
@@ -265,6 +268,41 @@ class Launcher {
     this.open(instance.id);
   }
 
+  /** Looks for known causes in the log once the last lines have arrived. */
+  async explainCrash(instanceId: string) {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    try {
+      const findings = await api.analyzeCrash(instanceId);
+      if (findings.length && this.error?.instanceId === instanceId) {
+        this.crash = { instanceId, findings, done: {} };
+        this.error = { instanceId, message: "Minecraft quit unexpectedly." };
+      }
+    } catch {
+      // The plain error and the log are still there.
+    }
+  }
+
+  async applyCrashFix(index: number) {
+    const crash = this.crash;
+    const fix = crash?.findings[index]?.fix;
+    if (!crash || !fix) return;
+    if (fix.type === "editInstance") {
+      this.edit(crash.instanceId);
+      return;
+    }
+    crash.done[index] = "Working…";
+    try {
+      this.replace(await api.applyCrashFix(crash.instanceId, fix));
+      this.modsRevision++;
+      crash.done[index] = { installMod: "Installed", turnOffMod: "Turned off", setMemory: "Changed", automaticJava: "Changed" }[
+        fix.type
+      ];
+    } catch (e) {
+      delete crash.done[index];
+      this.error = { instanceId: crash.instanceId, message: errorText(e) };
+    }
+  }
+
   async play(id = this.selectedId) {
     if (!id || this.activity[id]) return;
     if (!this.account) {
@@ -272,6 +310,7 @@ class Launcher {
       return;
     }
     this.error = null;
+    this.crash = null;
     this.notice = null;
     this.activity[id] = "launching";
     this.logs[id] = [];

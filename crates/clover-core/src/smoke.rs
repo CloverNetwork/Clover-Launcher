@@ -283,3 +283,46 @@ async fn boots_imported_pack() {
     let _ = child.kill().await;
     assert!(booted, "the imported pack didn't reach the title screen");
 }
+
+/// Installs Iris without Sodium, boots, and checks crash help names Sodium as the fix.
+/// `cargo test explains_a_missing_dependency -- --ignored --nocapture`
+#[tokio::test]
+#[ignore]
+async fn explains_a_missing_dependency() {
+    let client = Client::builder().user_agent("CloverNetwork/Clover-Launcher/test").build().unwrap();
+    let paths = Paths::at(root());
+    let mut instance = instance("fabric", "1.21.4", Some(latest(&client, "fabric", "1.21.4").await));
+    instance.id = "smoke-crash".into();
+    let sites = crate::mods::Sites { client: &client, curseforge_key: None };
+    let shelf = crate::mods::Shelf::mods(&paths, &instance);
+    let target = crate::mods::Target::for_instance(&instance).unwrap();
+    crate::mods::install(&sites, &shelf, &target, crate::mods::Source::Modrinth, "iris").await.unwrap();
+    for item in crate::mods::installed(&shelf).unwrap().into_iter().filter(|m| m.title != "Iris Shaders") {
+        crate::mods::remove(&shelf, &item.file).unwrap();
+    }
+    let installed = crate::install::install(&client, &paths, &Settings::default(), &instance, Verify::Existing, &mut Print).await.unwrap();
+    let mut command =
+        launch::build_command(&paths, &instance, &installed.resolved, &session(), &Settings::default(), &installed.java).unwrap();
+    command.stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::null()).kill_on_drop(true);
+    let mut child = command.spawn().unwrap();
+    let mut lines = BufReader::new(child.stdout.take().unwrap()).lines();
+    let mut log = Vec::new();
+    let mut log4j = crate::game::Log4jLines::default();
+    let read = tokio::time::timeout(Duration::from_secs(120), async {
+        while let Ok(Some(raw)) = lines.next_line().await {
+            if let Some(line) = log4j.push(&raw) {
+                log.extend(line.lines().map(String::from));
+            }
+        }
+    });
+    read.await.expect("the game should stop on its own");
+    let settings = Settings::default();
+    let context = crate::crash::Context { instance: &instance, settings: &settings, mods: crate::crash::mod_infos(&paths, &instance) };
+    let findings = crate::crash::analyze(&log, None, &context);
+    println!("{findings:#?}");
+    assert!(
+        findings.iter().any(|f| f.fix == Some(crate::crash::Fix::InstallMod { project: "sodium".into() })),
+        "no Sodium fix in {} log lines",
+        log.len()
+    );
+}

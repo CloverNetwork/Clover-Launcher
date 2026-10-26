@@ -13,7 +13,7 @@ use clover_core::loaders::{self, LoaderSource, LoaderVersion};
 use clover_core::manifest::{self, VersionEntry};
 use clover_core::paths::Paths;
 use clover_core::settings::{self, Settings};
-use clover_core::{auth, export, hooks, install, launch, mclogs, modpacks, mods, skins, worlds};
+use clover_core::{auth, crash, export, hooks, install, launch, mclogs, modpacks, mods, skins, worlds};
 use reqwest::Client;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_opener::OpenerExt;
@@ -425,6 +425,41 @@ async fn export_modpack(app: AppHandle, state: State<'_, AppState>, id: String, 
     Ok(exported)
 }
 
+/// Explains why the game quit with an error, from its log and newest crash report.
+#[tauri::command]
+fn analyze_crash(state: State<'_, AppState>, logs: State<'_, GameLogs>, id: String) -> Result<Vec<crash::Finding>> {
+    let instance = instances::get(&state.paths, &id)?;
+    let settings = settings::load(&state.paths);
+    let report = crash::newest_crash_report(&state.paths, &instance, instance.last_played.unwrap_or(0));
+    let context = crash::Context { instance: &instance, settings: &settings, mods: crash::mod_infos(&state.paths, &instance) };
+    Ok(crash::analyze(&logs.lines(&id), report.as_deref(), &context))
+}
+
+/// Applies a crash fix. Returns the instance, which changes for memory and Java fixes.
+#[tauri::command]
+async fn apply_crash_fix(state: State<'_, AppState>, running: State<'_, Running>, id: String, fix: crash::Fix) -> Result<Instance> {
+    if running.is_running(&id) {
+        return Err(msg("Quit the game first."));
+    }
+    let mut instance = instances::get(&state.paths, &id)?;
+    match &fix {
+        crash::Fix::InstallMod { project } => {
+            let settings = settings::load(&state.paths);
+            let (shelf, target) = (mods::Shelf::mods(&state.paths, &instance), mods::Target::for_instance(&instance)?);
+            mods::install(&sites(&state, &settings), &shelf, &target, mods::Source::Modrinth, project)
+                .await
+                .map_err(|e| msg(format!("Couldn't install it from Modrinth: {e}")))?;
+        }
+        crash::Fix::TurnOffMod { file } => crash::turn_off(&state.paths, &instance, file)?,
+        crash::Fix::SetMemory { .. } | crash::Fix::AutomaticJava => {
+            crash::apply_to_instance(&mut instance, &fix);
+            instances::save(&state.paths, &instance)?;
+        }
+        crash::Fix::EditInstance => {}
+    }
+    Ok(instance)
+}
+
 /// Shares an instance's log on mclo.gs, with access tokens and the home folder removed.
 #[tauri::command]
 async fn upload_log(state: State<'_, AppState>, logs: State<'_, GameLogs>, id: String) -> Result<mclogs::Uploaded> {
@@ -704,6 +739,8 @@ pub fn run() {
             open_screenshot,
             trash_screenshot,
             export_modpack,
+            analyze_crash,
+            apply_crash_fix,
             upload_log,
             open_log_window,
             pop_in_log_window,

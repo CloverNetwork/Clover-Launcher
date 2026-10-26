@@ -37,6 +37,7 @@
   const progress = $derived(launcher.progress[instance.id]);
   const error = $derived(launcher.error?.instanceId === instance.id ? launcher.error.message : null);
   const notice = $derived(launcher.notice?.instanceId === instance.id ? launcher.notice.message : null);
+  const crash = $derived(launcher.crash?.instanceId === instance.id ? launcher.crash : null);
   const busy = $derived(activity === "launching" || activity === "verifying");
 
   const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
@@ -81,9 +82,35 @@
 
   {#if error}
     <div class="error" role="alert">
-      <Icon name="warning" />
-      <p>{error}</p>
-      <button class="button" onclick={() => (launcher.error = null)}>Dismiss</button>
+      <div class="error-row">
+        <Icon name="warning" />
+        <p>{error}</p>
+        <button
+          class="button"
+          onclick={() => {
+            launcher.error = null;
+            launcher.crash = null;
+          }}>Dismiss</button
+        >
+      </div>
+      {#if crash}
+        <ul class="findings" aria-label="Likely causes">
+          {#each crash.findings as finding, index (index)}
+            {@const done = crash.done[index]}
+            <li>
+              <div class="finding-text">
+                <span class="finding-title">{finding.title}</span>
+                <span class="secondary">{finding.detail}</span>
+              </div>
+              {#if finding.action}
+                <button class="button" class:done={done && done !== "Working…"} disabled={!!done} onclick={() => launcher.applyCrashFix(index)}>
+                  {done ?? finding.action}
+                </button>
+              {/if}
+            </li>
+          {/each}
+        </ul>
+      {/if}
     </div>
   {/if}
 
@@ -211,15 +238,56 @@
   }
 
   .error {
-    display: flex;
-    align-items: center;
-    gap: 10px;
     max-width: 640px;
     margin-top: 20px;
     padding: 10px 12px;
     border-radius: var(--radius-panel);
     background: color-mix(in srgb, var(--danger) 10%, transparent);
     color: var(--text);
+  }
+
+  .error-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .findings {
+    margin: 10px 0 0 26px;
+    padding: 0;
+    list-style: none;
+  }
+
+  .findings li {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 0;
+    border-top: 1px solid var(--separator);
+  }
+
+  .finding-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .finding-title {
+    font-weight: 600;
+  }
+
+  .finding-text .secondary {
+    font-size: 12px;
+  }
+
+  .findings .button {
+    flex: none;
+  }
+
+  .findings .button.done:disabled {
+    opacity: 1;
+    color: var(--text-secondary);
   }
 
   .error :global(svg) {

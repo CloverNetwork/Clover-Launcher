@@ -78,6 +78,14 @@ export type World = {
 };
 export type Screenshot = { file: string; path: string; taken: number };
 export type Exported = { linked: number; included: number };
+export type CrashFix =
+  | { type: "installMod"; project: string }
+  | { type: "turnOffMod"; file: string }
+  | { type: "setMemory"; mb: number }
+  | { type: "automaticJava" }
+  | { type: "editInstance" };
+/** A likely cause of a crash, and a fix when Clover can apply one. */
+export type CrashFinding = { title: string; detail: string; fix: CrashFix | null; action: string | null };
 export type ModHit = {
   source: ModSource;
   id: string;
@@ -187,6 +195,8 @@ export const api = {
   openScreenshot: (id: string, file: string, reveal = false) => invoke<void>("open_screenshot", { id, file, reveal }),
   trashScreenshot: (id: string, file: string) => invoke<void>("trash_screenshot", { id, file }),
   exportModpack: (id: string, path: string) => invoke<Exported>("export_modpack", { id, path }),
+  analyzeCrash: (id: string) => invoke<CrashFinding[]>("analyze_crash", { id }),
+  applyCrashFix: (id: string, fix: CrashFix) => invoke<Instance>("apply_crash_fix", { id, fix }),
   /** The recent output of an instance's game and installers. */
   gameLog: (id: string) => invoke<string[]>("game_log", { id }),
   openLogWindow: (id: string) => invoke<void>("open_log_window", { id }),

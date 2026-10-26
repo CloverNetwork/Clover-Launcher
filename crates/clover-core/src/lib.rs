@@ -3,6 +3,7 @@
 //! any other front end can be built on the same calls.
 
 pub mod auth;
+pub mod crash;
 pub mod download;
 pub mod error;
 pub mod export;
