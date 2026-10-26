@@ -12,6 +12,8 @@ export type Instance = {
   createdAt: number;
   lastPlayed: number | null;
   installed: boolean;
+  /** Time spent in the game, in seconds. */
+  playSeconds: number;
   options: InstanceOptions;
 };
 
@@ -53,6 +55,10 @@ export type Settings = {
   curseforgeApiKey: string;
   /** On Hyprland, where windows have no title bar: show Clover's own window buttons. */
   showWindowButtons: boolean;
+  /** Show what's being played as the Discord status. */
+  discordStatus: boolean;
+  /** For builds without a Discord application built in. */
+  discordAppId: string;
 };
 /** How windows are framed: on Hyprland they have no title bar. */
 export type WindowChrome = { hyprland: boolean; buttons: boolean };
@@ -78,6 +84,10 @@ export type World = {
 };
 export type Screenshot = { file: string; path: string; taken: number };
 export type Exported = { linked: number; included: number };
+export type Server = { name: string; address: string; icon: string | null };
+export type ServerStatus = { motd: string; online: number; max: number; version: string; latencyMs: number; icon: string | null };
+/** Where the game goes straight after starting. */
+export type QuickPlay = { type: "server"; address: string } | { type: "world"; folder: string };
 export type CrashFix =
   | { type: "installMod"; project: string }
   | { type: "turnOffMod"; file: string }
@@ -165,7 +175,7 @@ export const api = {
   duplicateInstance: (id: string) => invoke<Instance>("duplicate_instance", { id }),
   /** Re-hashes every file and replaces damaged ones. Resolves to the instance and how many files were replaced. */
   verifyInstance: (id: string) => invoke<[Instance, number]>("verify_instance", { id }),
-  launchInstance: (id: string) => invoke<Instance>("launch_instance", { id }),
+  launchInstance: (id: string, quickPlay: QuickPlay | null = null) => invoke<Instance>("launch_instance", { id, quickPlay }),
   stopInstance: (id: string) => invoke<void>("stop_instance", { id }),
   searchMods: (id: string, place: Place, source: ModSource, query: string, offset: number) =>
     invoke<ModPage>("search_mods", { id, place, source, query, offset }),
@@ -195,6 +205,15 @@ export const api = {
   openScreenshot: (id: string, file: string, reveal = false) => invoke<void>("open_screenshot", { id, file, reveal }),
   trashScreenshot: (id: string, file: string) => invoke<void>("trash_screenshot", { id, file }),
   exportModpack: (id: string, path: string) => invoke<Exported>("export_modpack", { id, path }),
+  getInstance: (id: string) => invoke<Instance>("get_instance", { id }),
+  listServers: (id: string) => invoke<Server[]>("list_servers", { id }),
+  /** Adds a server, or changes the one at `index`. Resolves to the new list. */
+  saveServer: (id: string, index: number | null, name: string, address: string) =>
+    invoke<Server[]>("save_server", { id, index, name, address }),
+  removeServer: (id: string, index: number) => invoke<Server[]>("remove_server", { id, index }),
+  pingServer: (id: string, address: string) => invoke<ServerStatus>("ping_server", { id, address }),
+  /** Whether this build has a Discord application built in. */
+  discordBuiltIn: () => invoke<boolean>("discord_built_in"),
   analyzeCrash: (id: string) => invoke<CrashFinding[]>("analyze_crash", { id }),
   applyCrashFix: (id: string, fix: CrashFix) => invoke<Instance>("apply_crash_fix", { id, fix }),
   /** The recent output of an instance's game and installers. */

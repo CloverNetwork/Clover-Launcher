@@ -15,6 +15,10 @@
   let status = $state<string | null>(null);
   let backingUp = $state<string | null>(null);
   const running = $derived(launcher.activity[instance.id] === "running");
+  const busy = $derived(!!launcher.activity[instance.id]);
+
+  /** Starts the game straight into the world. */
+  const play = (world: World) => launcher.play(instance.id, { type: "world", folder: world.folder });
 
   // Reload when the game stops, since playing changes worlds.
   $effect(() => {
@@ -67,6 +71,8 @@
     e.preventDefault();
     const menu = await Menu.new({
       items: [
+        { id: "play", text: "Play", enabled: !busy, action: () => play(world) },
+        { item: "Separator" },
         { id: "datapacks", text: "Data Packs…", action: () => (launcher.dataPacksWorld = world) },
         { id: "backup", text: "Back Up", enabled: !backingUp, action: () => backup(world) },
         { id: "show", text: SHOW_FOLDER, action: () => api.showWorld(instance.id, world.folder) },
@@ -111,6 +117,7 @@
             </span>
           </div>
           <button class="button small" onclick={() => (launcher.dataPacksWorld = world)}>Data Packs…</button>
+          <button class="button small" disabled={busy} onclick={() => play(world)}>Play</button>
           <button class="icon-button" aria-label="More for {world.name}" title="More" onclick={(e) => showMenu(e, world)}>
             <Icon name="more" />
           </button>

@@ -3,6 +3,7 @@
 mod chrome;
 mod events;
 mod menu;
+mod presence;
 mod shortcuts;
 
 use clover_core::download::Verify;
@@ -13,7 +14,7 @@ use clover_core::loaders::{self, LoaderSource, LoaderVersion};
 use clover_core::manifest::{self, VersionEntry};
 use clover_core::paths::Paths;
 use clover_core::settings::{self, Settings};
-use clover_core::{auth, crash, export, hooks, install, launch, mclogs, modpacks, mods, skins, worlds};
+use clover_core::{auth, crash, export, servers, hooks, install, launch, mclogs, modpacks, mods, skins, worlds};
 use reqwest::Client;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_opener::OpenerExt;
@@ -180,7 +181,13 @@ async fn verify_instance(app: AppHandle, state: State<'_, AppState>, running: St
 }
 
 #[tauri::command]
-async fn launch_instance(app: AppHandle, state: State<'_, AppState>, running: State<'_, Running>, id: String) -> Result<Instance> {
+async fn launch_instance(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    running: State<'_, Running>,
+    id: String,
+    quick_play: Option<launch::QuickPlay>,
+) -> Result<Instance> {
     if running.is_running(&id) {
         return Err(msg("This instance is already running."));
     }
@@ -192,7 +199,8 @@ async fn launch_instance(app: AppHandle, state: State<'_, AppState>, running: St
     let mut reporter = AppReporter::new(app.clone(), id.clone());
     // Only missing files download; Verify Game Files re-hashes everything.
     let installed = install::install(&state.http, &state.paths, &settings, &instance, Verify::Existing, &mut reporter).await?;
-    let command = launch::build_command(&state.paths, &instance, &installed.resolved, &session, &settings, &installed.java)?;
+    let command =
+        launch::build_command(&state.paths, &instance, &installed.resolved, &session, &settings, &installed.java, quick_play.as_ref())?;
     if !instance.options.pre_launch.trim().is_empty() {
         clover_core::install::Reporter::stage(&mut reporter, "Running the pre-launch command…");
         hooks::run(&state.paths, &instance, &instance.options.pre_launch, Some(&installed.java))
@@ -203,12 +211,15 @@ async fn launch_instance(app: AppHandle, state: State<'_, AppState>, running: St
     let (log_app, log_id) = (app.clone(), id.clone());
     let (exit_app, exit_id) = (app.clone(), id.clone());
     let (hook_paths, hook_instance, hook_java) = (state.paths.clone(), instance.clone(), installed.java.clone());
+    let started_at = std::time::Instant::now();
     let started = game::spawn(
         command,
         stop,
         move |line| events::emit_log(&log_app, &log_id, line),
         move |code| {
             exit_app.state::<Running>().finished(&exit_id);
+            let _ = instances::add_play_time(&hook_paths, &exit_id, started_at.elapsed().as_secs());
+            presence::game_stopped(&exit_app);
             events::emit_exit(&exit_app, &exit_id, code);
             let command = hook_instance.options.post_exit.clone();
             if !command.trim().is_empty() {
@@ -224,6 +235,7 @@ async fn launch_instance(app: AppHandle, state: State<'_, AppState>, running: St
         running.finished(&id);
         return Err(e);
     }
+    presence::game_started(&app, &settings, &instance);
     instance.installed = true;
     instance.profile_id = Some(installed.resolved.id);
     instance.last_played = Some(instances::now());
@@ -423,6 +435,46 @@ async fn export_modpack(app: AppHandle, state: State<'_, AppState>, id: String, 
     let exported = export::export(&sites(&state, &settings), &state.paths, &instance, &out).await?;
     let _ = app.opener().reveal_item_in_dir(out);
     Ok(exported)
+}
+
+#[tauri::command]
+fn get_instance(state: State<'_, AppState>, id: String) -> Result<Instance> {
+    instances::get(&state.paths, &id)
+}
+
+#[tauri::command]
+fn discord_built_in() -> bool {
+    option_env!("DISCORD_APP_ID").is_some()
+}
+
+#[tauri::command]
+fn list_servers(state: State<'_, AppState>, id: String) -> Result<Vec<servers::Server>> {
+    servers::list(&state.paths, &instances::get(&state.paths, &id)?)
+}
+
+/// Adds a server, or changes the one at `index`. Returns the new list.
+#[tauri::command]
+fn save_server(state: State<'_, AppState>, id: String, index: Option<usize>, name: String, address: String) -> Result<Vec<servers::Server>> {
+    let instance = instances::get(&state.paths, &id)?;
+    match index {
+        Some(index) => servers::edit(&state.paths, &instance, index, &name, &address),
+        None => servers::add(&state.paths, &instance, &name, &address),
+    }
+}
+
+#[tauri::command]
+fn remove_server(state: State<'_, AppState>, id: String, index: usize) -> Result<Vec<servers::Server>> {
+    servers::remove(&state.paths, &instances::get(&state.paths, &id)?, index)
+}
+
+/// Pings a server and keeps its icon in the list, as the game would.
+#[tauri::command]
+async fn ping_server(state: State<'_, AppState>, id: String, address: String) -> Result<servers::Status> {
+    let status = servers::ping(&address).await?;
+    if let (Some(icon), Ok(instance)) = (&status.icon, instances::get(&state.paths, &id)) {
+        let _ = servers::remember_icon(&state.paths, &instance, &address, icon);
+    }
+    Ok(status)
 }
 
 /// Explains why the game quit with an error, from its log and newest crash report.
@@ -674,6 +726,7 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(Running::default())
+        .manage(presence::Discord::default())
         .manage(GameLogs::default())
         .setup(|app| {
             let http = Client::builder()
@@ -740,6 +793,12 @@ pub fn run() {
             trash_screenshot,
             export_modpack,
             analyze_crash,
+            list_servers,
+            discord_built_in,
+            get_instance,
+            save_server,
+            remove_server,
+            ping_server,
             apply_crash_fix,
             upload_log,
             open_log_window,

@@ -32,9 +32,11 @@
 
   let chrome = $state<WindowChrome | null>(null);
   let version = $state("");
+  let discordBuiltIn = $state(true);
 
   onMount(async () => {
     chrome = await api.windowChrome();
+    discordBuiltIn = await api.discordBuiltIn();
     version = await getVersion();
     const loaded = await api.getSettings();
     // "java" meant "whatever is on the PATH" before automatic Java existed.
@@ -143,6 +145,30 @@
           <button type="button" class="inline-link" onclick={() => openUrl(CURSEFORGE_KEY_FORM)}>apply for here</button>.
           Personal keys from the CurseForge console usually aren't accepted.
         </p>
+      </div>
+
+      <span class="label">Discord:</span>
+      <div>
+        <label class="checkbox">
+          <input type="checkbox" bind:checked={settings.discordStatus} onchange={save} />
+          Show what I'm playing as my status
+        </label>
+        {#if settings.discordStatus && !discordBuiltIn}
+          <input
+            class="field discord-id"
+            bind:value={settings.discordAppId}
+            oninput={save}
+            placeholder="Application ID"
+            aria-label="Discord application ID"
+            spellcheck="false"
+            autocomplete="off"
+          />
+          <p class="hint secondary">
+            The status names a Discord application. Create one in the Discord Developer Portal and paste its ID here.
+          </p>
+        {:else}
+          <p class="hint secondary">Discord shows the instance and Minecraft version while you play.</p>
+        {/if}
       </div>
 
       {#if chrome?.hyprland}
@@ -276,6 +302,12 @@
   .key-row {
     display: flex;
     gap: 8px;
+  }
+
+  .discord-id {
+    display: block;
+    width: 100%;
+    margin-top: 8px;
   }
 
   .key-row .field {

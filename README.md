@@ -5,7 +5,12 @@ A Minecraft: Java Edition launcher built with Tauri, Rust and Svelte.
 - Vanilla, Fabric, Quilt, Forge, NeoForge, Legacy Fabric, Ornithe and Babric
 - Import any launcher profile JSON for other loaders
 - Mods from Modrinth and CurseForge, with dependencies and updates (CurseForge needs an API key in Settings)
-- Modpacks from Modrinth and CurseForge, or a `.mrpack` / CurseForge zip from disk
+- Resource packs, shader packs and data packs
+- Modpacks from Modrinth and CurseForge, or a `.mrpack` / CurseForge zip from disk; export as `.mrpack`
+- Worlds with backups, screenshots, and a server list with status
+- Join a server or open a world straight from the launcher
+- Crash help that spots missing mods, the wrong Java and memory problems
+- Discord status while playing
 - Multiple Microsoft accounts
 - Skins and capes
 
@@ -65,3 +70,7 @@ CurseForge mods need an API key approved for third-party apps
 ([apply here](https://forms.monday.com/forms/dce5ccb7afda9a1c21dab1a1aa1d84eb?r=use1)). Paste it in
 Settings, or build it in with `CURSEFORGE_API_KEY='...' pnpm tauri build`. Use single quotes,
 because keys contain `$`.
+
+The Discord status needs a Discord application (Developer Portal → New Application; add an image
+named `clover` under Rich Presence → Art Assets). Build its ID in with `DISCORD_APP_ID=...`, or
+paste it in Settings.

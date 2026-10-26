@@ -4,6 +4,7 @@
 
 pub mod auth;
 pub mod crash;
+pub mod discord;
 pub mod download;
 pub mod error;
 pub mod export;
@@ -21,6 +22,7 @@ pub mod modpacks;
 pub mod mods;
 pub mod paths;
 pub mod profile;
+pub mod servers;
 pub mod settings;
 pub mod skins;
 pub mod worlds;

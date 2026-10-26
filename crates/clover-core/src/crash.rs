@@ -319,6 +319,7 @@ mod tests {
             created_at: 0,
             last_played: None,
             installed: true,
+            play_seconds: 0,
             options: Default::default(),
         }
     }

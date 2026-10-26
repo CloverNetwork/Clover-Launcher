@@ -5,12 +5,13 @@
   import Icon from "./Icon.svelte";
   import ContentSection from "./ContentSection.svelte";
   import ScreenshotsSection from "./ScreenshotsSection.svelte";
+  import ServersSection from "./ServersSection.svelte";
   import WorldsSection from "./WorldsSection.svelte";
   import { SHOW_FOLDER } from "$lib/platform";
 
   let { instance }: { instance: Instance } = $props();
 
-  type Tab = "mods" | "resourcepacks" | "shaders" | "worlds" | "screenshots";
+  type Tab = "mods" | "resourcepacks" | "shaders" | "worlds" | "servers" | "screenshots";
   const modded = $derived(instance.loader !== "vanilla" && instance.loader !== "custom");
   // Shader packs need Iris or OptiFine, which are mods.
   const tabs = $derived<{ id: Tab; label: string }[]>([
@@ -18,6 +19,7 @@
     { id: "resourcepacks", label: "Resource Packs" },
     ...(modded ? [{ id: "shaders" as const, label: "Shaders" }] : []),
     { id: "worlds", label: "Worlds" },
+    { id: "servers", label: "Servers" },
     { id: "screenshots", label: "Screenshots" },
   ]);
   let chosen = $state<Tab>("mods");
@@ -42,6 +44,16 @@
 
   const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
   const formatDate = (seconds: number | null) => (seconds ? dateFormat.format(seconds * 1000) : "Never");
+
+  /** "3 hr 20 min", "45 min", or "Less than a minute". */
+  function formatDuration(seconds: number) {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    if (!hours && !minutes) return seconds ? "Less than a minute" : "None yet";
+    const unit = (value: number, style: "hour" | "minute") =>
+      new Intl.NumberFormat(undefined, { style: "unit", unit: style, unitDisplay: "short" }).format(value);
+    return [hours ? unit(hours, "hour") : "", minutes ? unit(minutes, "minute") : ""].filter(Boolean).join(" ");
+  }
 
   const status = $derived.by(() => {
     if (activity === "running") return "Playing";
@@ -116,6 +128,7 @@
 
   <dl class="facts">
     <div><dt>Last Played</dt><dd>{formatDate(instance.lastPlayed)}</dd></div>
+    <div><dt>Time Played</dt><dd>{formatDuration(instance.playSeconds ?? 0)}</dd></div>
     <div><dt>Created</dt><dd>{formatDate(instance.createdAt)}</dd></div>
     <div>
       <dt>Game Folder</dt>
@@ -148,6 +161,8 @@
       <ContentSection {instance} place={{ kind: "shader" }} />
     {:else if tab === "worlds"}
       <WorldsSection {instance} />
+    {:else if tab === "servers"}
+      <ServersSection {instance} />
     {:else}
       <ScreenshotsSection {instance} />
     {/if}

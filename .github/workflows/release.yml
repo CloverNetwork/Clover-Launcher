@@ -63,6 +63,8 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           # Built-in CurseForge key, if CurseForge approved one. Optional.
           CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
+          # The Discord application the status names. Optional.
+          DISCORD_APP_ID: ${{ secrets.DISCORD_APP_ID }}
           # macOS signing and notarization with an Apple Developer ID. Uncomment once the
           # secrets exist; without them the app is unsigned.
           # APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}

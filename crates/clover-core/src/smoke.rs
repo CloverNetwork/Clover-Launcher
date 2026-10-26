@@ -49,6 +49,7 @@ fn instance(loader: &str, game: &str, loader_version: Option<String>) -> Instanc
         created_at: 0,
         last_played: None,
         installed: false,
+        play_seconds: 0,
         options: Default::default(),
     }
 }
@@ -112,7 +113,7 @@ async fn prepares_every_builtin_loader() {
         let instance = instance(loader, game, version);
         let resolved = prepare(&client, &paths, &instance).await;
         let java = std::path::Path::new("java");
-        let command = launch::build_command(&paths, &instance, &resolved, &session(), &Settings::default(), java).unwrap();
+        let command = launch::build_command(&paths, &instance, &resolved, &session(), &Settings::default(), java, None).unwrap();
         let args: Vec<String> = command.as_std().get_args().map(|a| a.to_string_lossy().into_owned()).collect();
         let classpath = &args[args.iter().position(|a| a == "-cp").expect("has -cp") + 1];
         for entry in classpath.split(':') {
@@ -135,7 +136,7 @@ async fn boots(loader: &str, game: &str, loader_marker: &str) {
     let installed = crate::install::install(&client, &paths, &Settings::default(), &instance, Verify::Existing, &mut Print).await.unwrap();
     println!("  java: {}", installed.java.display());
     let mut command =
-        launch::build_command(&paths, &instance, &installed.resolved, &session(), &Settings::default(), &installed.java).unwrap();
+        launch::build_command(&paths, &instance, &installed.resolved, &session(), &Settings::default(), &installed.java, None).unwrap();
     command.stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped()).kill_on_drop(true);
     let mut child = command.spawn().unwrap();
     let mut stderr = BufReader::new(child.stderr.take().unwrap()).lines();
@@ -261,7 +262,7 @@ async fn boots_imported_pack() {
         crate::mods::installed(&crate::mods::Shelf::mods(&paths, &instance)).unwrap().len());
     let installed = crate::install::install(&client, &paths, &Settings::default(), &instance, Verify::Existing, &mut Print).await.unwrap();
     let mut command =
-        launch::build_command(&paths, &instance, &installed.resolved, &session(), &Settings::default(), &installed.java).unwrap();
+        launch::build_command(&paths, &instance, &installed.resolved, &session(), &Settings::default(), &installed.java, None).unwrap();
     command.stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::null()).kill_on_drop(true);
     let mut child = command.spawn().unwrap();
     let mut lines = BufReader::new(child.stdout.take().unwrap()).lines();
@@ -302,7 +303,7 @@ async fn explains_a_missing_dependency() {
     }
     let installed = crate::install::install(&client, &paths, &Settings::default(), &instance, Verify::Existing, &mut Print).await.unwrap();
     let mut command =
-        launch::build_command(&paths, &instance, &installed.resolved, &session(), &Settings::default(), &installed.java).unwrap();
+        launch::build_command(&paths, &instance, &installed.resolved, &session(), &Settings::default(), &installed.java, None).unwrap();
     command.stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::null()).kill_on_drop(true);
     let mut child = command.spawn().unwrap();
     let mut lines = BufReader::new(child.stdout.take().unwrap()).lines();
@@ -325,4 +326,37 @@ async fn explains_a_missing_dependency() {
         "no Sodium fix in {} log lines",
         log.len()
     );
+}
+
+/// Starts vanilla with Quick Play and waits for it to connect to a server on its own.
+/// `cargo test quick_play_joins_a_server -- --ignored --nocapture`
+#[tokio::test]
+#[ignore]
+async fn quick_play_joins_a_server() {
+    let client = Client::new();
+    let paths = Paths::at(root());
+    let instance = instance("vanilla", "1.21.4", None);
+    let installed = crate::install::install(&client, &paths, &Settings::default(), &instance, Verify::Existing, &mut Print).await.unwrap();
+    let quick = launch::QuickPlay::Server { address: "mc.hypixel.net".into() };
+    let mut command =
+        launch::build_command(&paths, &instance, &installed.resolved, &session(), &Settings::default(), &installed.java, Some(&quick)).unwrap();
+    command.stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::null()).kill_on_drop(true);
+    let mut child = command.spawn().unwrap();
+    let mut lines = BufReader::new(child.stdout.take().unwrap()).lines();
+    let connected = tokio::time::timeout(Duration::from_secs(180), async {
+        let mut log4j = crate::game::Log4jLines::default();
+        while let Ok(Some(raw)) = lines.next_line().await {
+            if let Some(line) = log4j.push(&raw) {
+                if line.contains("Connecting to mc.hypixel.net") {
+                    println!("  {line}");
+                    return true;
+                }
+            }
+        }
+        false
+    })
+    .await
+    .unwrap_or(false);
+    let _ = child.kill().await;
+    assert!(connected, "the game didn't connect by itself");
 }

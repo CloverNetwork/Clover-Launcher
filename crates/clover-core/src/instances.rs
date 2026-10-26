@@ -23,6 +23,9 @@ pub struct Instance {
     pub created_at: u64,
     pub last_played: Option<u64>,
     pub installed: bool,
+    /// Time spent in the game, in seconds.
+    #[serde(default)]
+    pub play_seconds: u64,
     /// What the person changed in Edit Instance; empty means "use the defaults".
     #[serde(default)]
     pub options: InstanceOptions,
@@ -113,6 +116,7 @@ pub fn create(paths: &Paths, name: &str, version: &str, loader: &str, loader_ver
         created_at: now(),
         last_played: None,
         installed: false,
+        play_seconds: 0,
         options: Default::default(),
     };
     save(paths, &instance)?;
@@ -179,6 +183,14 @@ fn copy_dir(from: &std::path::Path, to: &std::path::Path, skip: &[&str]) -> Resu
         }
     }
     Ok(())
+}
+
+/// Adds a finished session's length to the instance's play time.
+pub fn add_play_time(paths: &Paths, id: &str, seconds: u64) -> Result<Instance> {
+    let mut instance = get(paths, id)?;
+    instance.play_seconds += seconds;
+    save(paths, &instance)?;
+    Ok(instance)
 }
 
 pub fn delete(paths: &Paths, id: &str) -> Result<()> {

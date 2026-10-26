@@ -62,6 +62,10 @@ impl Running {
     pub fn finished(&self, id: &str) {
         self.0.lock().unwrap().remove(id);
     }
+
+    pub fn any(&self) -> bool {
+        !self.0.lock().unwrap().is_empty()
+    }
 }
 
 /// Starts the game. Output goes to `on_line` as it's printed, with Mojang's log4j XML

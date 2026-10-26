@@ -771,6 +771,7 @@ mod tests {
             created_at: 0,
             last_played: None,
             installed: false,
+            play_seconds: 0,
             options: Default::default(),
         }
     }

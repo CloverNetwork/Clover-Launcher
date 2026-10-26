@@ -2,10 +2,11 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::path::Path;
 
+use serde::Deserialize;
 use tokio::process::Command;
 
 use crate::auth::Session;
-use crate::error::Result;
+use crate::error::{Result, msg};
 use crate::install::client_jar_path;
 use crate::instances::Instance;
 use crate::manifest::{ArgValue, Argument, rules_allow};
@@ -14,6 +15,37 @@ use crate::profile::Resolved;
 use crate::settings::Settings;
 
 const CLASSPATH_SEPARATOR: &str = if cfg!(windows) { ";" } else { ":" };
+
+/// Where the game goes straight after starting, instead of the title screen.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum QuickPlay {
+    /// A server address, such as "mc.example.com:25565".
+    Server { address: String },
+    /// A world's folder in `saves`.
+    World { folder: String },
+}
+
+/// The arguments for Quick Play. Versions since 1.20 declare `--quickPlayMultiplayer`
+/// themselves; older ones only know `--server` and `--port`, and can't open a world.
+fn quick_play_args(version: &Resolved, quick_play: &QuickPlay) -> Result<Vec<String>> {
+    let modern = version.game_args.iter().any(|arg| match arg {
+        Argument::Conditional { value: ArgValue::Many(values), .. } => values.iter().any(|v| v == "--quickPlayMultiplayer"),
+        _ => false,
+    });
+    Ok(match (quick_play, modern) {
+        (QuickPlay::Server { address }, true) => vec!["--quickPlayMultiplayer".into(), address.clone()],
+        (QuickPlay::Server { address }, false) => {
+            let (host, port) = match address.rsplit_once(':') {
+                Some((host, port)) if !host.contains(':') && port.parse::<u16>().is_ok() => (host.to_string(), port.to_string()),
+                _ => (address.clone(), "25565".into()),
+            };
+            vec!["--server".into(), host, "--port".into(), port]
+        }
+        (QuickPlay::World { folder }, true) => vec!["--quickPlaySingleplayer".into(), folder.clone()],
+        (QuickPlay::World { .. }, false) => return Err(msg("Opening a world from Clover needs Minecraft 1.20 or newer.")),
+    })
+}
 
 /// Builds the `java` command for an installed version, substituting the
 /// `${placeholders}` that version JSONs use in their arguments.
@@ -24,6 +56,7 @@ pub fn build_command(
     session: &Session,
     settings: &Settings,
     java: &Path,
+    quick_play: Option<&QuickPlay>,
 ) -> Result<Command> {
     let game_dir = paths.instance(&instance.id).join("minecraft");
     let natives_dir = paths.instance(&instance.id).join("natives");
@@ -90,8 +123,14 @@ pub fn build_command(
         args.extend(["--width".into(), width.to_string(), "--height".into(), height.to_string()]);
     }
 
+    let mut args: Vec<String> = args.iter().map(|a| expand(a)).collect();
+    // Added after expanding, since addresses and world names are the person's own text.
+    if let Some(quick_play) = quick_play {
+        args.extend(quick_play_args(version, quick_play)?);
+    }
+
     let mut command = Command::new(java);
-    command.args(args.iter().map(|a| expand(a))).current_dir(&game_dir);
+    command.args(args).current_dir(&game_dir);
     Ok(command)
 }
 

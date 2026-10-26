@@ -1,7 +1,7 @@
 import { Menu } from "@tauri-apps/api/menu";
 import { ask, message, save } from "@tauri-apps/plugin-dialog";
 import { DELETE_INSTANCE, SHORTCUT_LABEL, SHOW_FOLDER, TRASH } from "./platform";
-import { api, errorText, events, type Accounts, type Instance, type LoaderSource, type CrashFinding, type Place, type Profile, type World } from "./api";
+import { api, errorText, events, type Accounts, type Instance, type LoaderSource, type CrashFinding, type Place, type QuickPlay, type Profile, type World } from "./api";
 
 const MAX_LOG_LINES = 2000;
 
@@ -135,6 +135,8 @@ class Launcher {
       }),
       events.gameExit(({ instanceId, code }) => {
         delete this.activity[instanceId];
+        // Play time was just added.
+        api.getInstance(instanceId).then((i) => this.replace(i), () => {});
         if (code !== null && code !== 0) {
           this.error = { instanceId, message: `Minecraft quit unexpectedly (exit code ${code}). The game log has details.` };
           this.logVisible = true;
@@ -303,7 +305,7 @@ class Launcher {
     }
   }
 
-  async play(id = this.selectedId) {
+  async play(id = this.selectedId, quickPlay: QuickPlay | null = null) {
     if (!id || this.activity[id]) return;
     if (!this.account) {
       this.accountOpen = true;
@@ -315,7 +317,7 @@ class Launcher {
     this.activity[id] = "launching";
     this.logs[id] = [];
     try {
-      this.replace(await api.launchInstance(id));
+      this.replace(await api.launchInstance(id, quickPlay));
       this.activity[id] = "running";
     } catch (e) {
       delete this.activity[id];
