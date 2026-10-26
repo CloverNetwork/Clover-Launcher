@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import { LogicalPosition } from "@tauri-apps/api/dpi";
   import { CheckMenuItem, Menu, MenuItem, PredefinedMenuItem } from "@tauri-apps/api/menu";
-  import { events } from "$lib/api";
+  import { api, events } from "$lib/api";
   import { launcher } from "$lib/launcher.svelte";
   import AccountSheet from "$lib/components/AccountSheet.svelte";
   import CloverLogo from "$lib/components/CloverLogo.svelte";
@@ -16,6 +16,7 @@
   import Sidebar from "$lib/components/Sidebar.svelte";
   import WardrobeSheet from "$lib/components/WardrobeSheet.svelte";
   import WindowControls from "$lib/components/WindowControls.svelte";
+  import { commandKey, hasMenuBar, SETTINGS } from "$lib/platform";
 
   const menuActions: Record<string, () => void> = {
     new_instance: () => (launcher.newInstanceOpen = true),
@@ -76,7 +77,37 @@
   /** The instance page is showing: always in the sidebar layout, on demand in the grid. */
   const showingDetail = $derived(!!launcher.selected && (!grid || launcher.detailOpen));
 
+  /**
+   * Windows and Linux have no menu bar to own the shortcuts, so the window does. The keys
+   * match the macOS menu, with Ctrl in place of ⌘.
+   */
+  const shortcuts: { key: string; shift?: boolean; command: string }[] = [
+    { key: "n", command: "new_instance" },
+    { key: "n", shift: true, command: "import_modpack" },
+    { key: ",", command: "settings" },
+    { key: "r", shift: true, command: "show_folder" },
+    { key: "1", command: "view_sidebar" },
+    { key: "2", command: "view_grid" },
+    { key: "l", command: "toggle_log" },
+    { key: "enter", command: "play" },
+    { key: ".", command: "stop" },
+    { key: "k", shift: true, command: "skins" },
+  ];
+
+  function runShortcut(e: KeyboardEvent): boolean {
+    if (hasMenuBar || !commandKey(e) || document.querySelector("dialog[open]")) return false;
+    const typing = e.target instanceof HTMLElement && e.target.closest("input, textarea, select");
+    const key = e.key.toLowerCase();
+    const match = shortcuts.find((s) => s.key === key && !!s.shift === e.shiftKey);
+    if (!match || (typing && key !== "enter")) return false;
+    e.preventDefault();
+    if (match.command === "settings") api.openSettings();
+    else onMenuCommand(match.command);
+    return true;
+  }
+
   function onKeydown(e: KeyboardEvent) {
+    if (runShortcut(e)) return;
     // Escape leaves an instance's page in the grid layout, unless a sheet has it.
     if (e.key === "Escape" && grid && launcher.detailOpen && !document.querySelector("dialog[open]")) {
       launcher.detailOpen = false;
@@ -150,6 +181,11 @@
           onclick={() => (launcher.logVisible = !launcher.logVisible)}
         >
           <Icon name="log" />
+        </button>
+      {/if}
+      {#if !hasMenuBar}
+        <button class="icon-button" aria-label={SETTINGS} title={SETTINGS} onclick={() => api.openSettings()}>
+          <Icon name="gear" />
         </button>
       {/if}
       <button

@@ -41,7 +41,8 @@ pub fn build(app: &AppHandle, accounts: &Accounts) -> tauri::Result<Menu<Wry>> {
         .item(&item("show_folder", "Show in Finder", Some("CmdOrCtrl+Shift+R"))?)
         .item(&item("create_shortcut", SHORTCUT_LABEL, None)?)
         .separator()
-        .item(&item("delete_instance", "Delete Instance…", Some("CmdOrCtrl+Backspace"))?)
+        // No ⌘⌫: the menu would catch it before text fields, where it deletes to the line start.
+        .item(&item("delete_instance", "Move to Trash", None)?)
         .separator()
         .close_window()
         .build()?;
@@ -107,11 +108,15 @@ pub fn open_settings(app: &AppHandle) {
         return;
     }
     let _ = WebviewWindowBuilder::new(app, "settings", WebviewUrl::App("settings".into()))
-        .title("Settings")
+        // GNOME calls it Preferences.
+        .title(if cfg!(target_os = "linux") { "Preferences" } else { "Settings" })
         .inner_size(540.0, 560.0)
         .resizable(false)
         .minimizable(false)
         .maximizable(false)
         .decorations(crate::chrome::decorated())
+        // Elsewhere the page shows the window once drawn, so there's no white flash. macOS
+        // opens it right away: a hidden window there doesn't draw its page at all.
+        .visible(cfg!(target_os = "macos"))
         .build();
 }

@@ -1,15 +1,10 @@
 import { Menu } from "@tauri-apps/api/menu";
 import { ask, message } from "@tauri-apps/plugin-dialog";
+import { DELETE_INSTANCE, SHORTCUT_LABEL, SHOW_FOLDER, TRASH } from "./platform";
 import { api, errorText, events, type Accounts, type Instance, type LoaderSource, type Profile } from "./api";
 
 const MAX_LOG_LINES = 2000;
 
-/** Where an instance shortcut goes, in each OS's words. */
-export const SHORTCUT_LABEL = navigator.userAgent.includes("Mac")
-  ? "Add to Applications"
-  : navigator.userAgent.includes("Windows")
-    ? "Create Desktop Shortcut"
-    : "Add to App Launcher";
 const LAYOUT_KEY = "clover.layout";
 
 export type Layout = "sidebar" | "grid";
@@ -167,13 +162,13 @@ class Launcher {
           ? { id: "stop", text: "Stop", action: () => this.stop(id) }
           : { id: "play", text: "Play", enabled: !this.activity[id], action: () => this.play(id) },
         { item: "Separator" },
-        { id: "show", text: "Show in Finder", action: () => this.showFolder(id) },
+        { id: "show", text: SHOW_FOLDER, action: () => this.showFolder(id) },
         { id: "verify", text: "Verify Game Files", enabled: !this.activity[id], action: () => this.verify(id) },
         { item: "Separator" },
         { id: "shortcut", text: SHORTCUT_LABEL, action: () => this.createShortcut(id) },
         { id: "command", text: "Copy Launch Command", action: () => this.copyLaunchCommand(id) },
         { item: "Separator" },
-        { id: "delete", text: "Delete Instance…", enabled: !running, action: () => this.remove(id) },
+        { id: "delete", text: DELETE_INSTANCE, enabled: !running, action: () => this.remove(id) },
       ],
     });
     await menu.popup();
@@ -237,8 +232,8 @@ class Launcher {
     const instance = this.instances.find((i) => i.id === id);
     if (!instance) return;
     const confirmed = await ask(
-      `Its worlds, screenshots and settings will be deleted. You can't undo this action.`,
-      { title: `Delete “${instance.name}”?`, kind: "warning", okLabel: "Delete", cancelLabel: "Cancel" },
+      `Its worlds, screenshots and settings go to the ${TRASH}, where you can restore them until it's emptied.`,
+      { title: `Move “${instance.name}” to the ${TRASH}?`, kind: "warning", okLabel: DELETE_INSTANCE, cancelLabel: "Cancel" },
     );
     if (!confirmed) return;
     try {

@@ -4,7 +4,8 @@
 use clover_core::game::GameLogs;
 use clover_core::install::Reporter;
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::window::{ProgressBarState, ProgressBarStatus};
+use tauri::{AppHandle, Emitter, Manager, UserAttentionType, WebviewUrl, WebviewWindowBuilder};
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -34,6 +35,30 @@ pub fn clear_log(app: &AppHandle, instance_id: &str) {
 
 pub fn emit_exit(app: &AppHandle, instance_id: &str, code: Option<i32>) {
     let _ = app.emit("game-exit", GameExit { instance_id, code });
+    // A crash in the background bounces the Dock icon or flashes the taskbar button.
+    if code.is_some_and(|c| c != 0) {
+        if let Some(main) = app.get_webview_window("main") {
+            if !main.is_focused().unwrap_or(true) {
+                let _ = main.request_user_attention(Some(UserAttentionType::Informational));
+            }
+        }
+    }
+}
+
+/// Download progress on the app's Dock icon (macOS) or taskbar button (Windows, and
+/// Linux desktops that support it). `None` clears it.
+fn icon_progress(app: &AppHandle, fraction: Option<f64>) {
+    if let Some(main) = app.get_webview_window("main") {
+        let state = match fraction {
+            Some(f) => ProgressBarState { status: Some(ProgressBarStatus::Normal), progress: Some((f * 100.0).round() as u64) },
+            None => ProgressBarState { status: Some(ProgressBarStatus::None), progress: None },
+        };
+        let _ = main.set_progress_bar(state);
+    }
+}
+
+fn show_files_on_icon(app: &AppHandle, done: usize, total: usize) {
+    icon_progress(app, (total > 0 && done < total).then(|| done as f64 / total as f64));
 }
 
 /// Opens an instance's log in its own window, or brings it forward if it's open.
@@ -47,6 +72,9 @@ pub fn open_log_window(app: &AppHandle, instance_id: &str, name: &str) -> tauri:
         .inner_size(760.0, 480.0)
         .min_inner_size(420.0, 240.0)
         .decorations(crate::chrome::decorated())
+        // Elsewhere the page shows the window once drawn, so there's no white flash. macOS
+        // opens it right away: a hidden window there doesn't draw its page at all.
+        .visible(cfg!(target_os = "macos"))
         .build()?;
     Ok(())
 }
@@ -104,11 +132,19 @@ impl Reporter for AppReporter {
     fn files(&mut self, done: usize, total: usize) {
         if worth_emitting(&mut self.last_emitted, done, total) {
             let _ = self.app.emit("install-progress", Progress { instance_id: &self.instance_id, stage: None, done, total });
+            show_files_on_icon(&self.app, done, total);
         }
     }
 
     fn log(&mut self, line: String) {
         emit_log(&self.app, &self.instance_id, line);
+    }
+}
+
+/// However the job ends, the icon stops showing progress.
+impl Drop for AppReporter {
+    fn drop(&mut self) {
+        icon_progress(&self.app, None);
     }
 }
 
@@ -141,8 +177,15 @@ impl Reporter for ImportReporter {
     fn files(&mut self, done: usize, total: usize) {
         if worth_emitting(&mut self.last_emitted, done, total) {
             let _ = self.app.emit("import-progress", ImportProgress { stage: None, done, total });
+            show_files_on_icon(&self.app, done, total);
         }
     }
 
     fn log(&mut self, _: String) {}
+}
+
+impl Drop for ImportReporter {
+    fn drop(&mut self) {
+        icon_progress(&self.app, None);
+    }
 }

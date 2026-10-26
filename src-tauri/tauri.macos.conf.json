@@ -9,6 +9,7 @@
         "height": 620,
         "minWidth": 640,
         "minHeight": 440,
+        "visible": true,
         "titleBarStyle": "Overlay",
         "hiddenTitle": true,
         "transparent": true,

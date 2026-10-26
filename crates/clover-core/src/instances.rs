@@ -85,7 +85,35 @@ pub fn create(paths: &Paths, name: &str, version: &str, loader: &str, loader_ver
     Ok(instance)
 }
 
+/// Moves an instance to the Trash (the Recycle Bin on Windows), so it can be put back.
+/// If the system has no Trash, nothing is deleted: worlds are too valuable to lose for good.
 pub fn delete(paths: &Paths, id: &str) -> Result<()> {
-    std::fs::remove_dir_all(paths.instance(id))?;
-    Ok(())
+    let dir = paths.instance(id);
+    if !dir.exists() {
+        return Err(msg("That instance no longer exists."));
+    }
+    #[allow(unused_mut)]
+    let mut trash = trash::TrashContext::default();
+    // On macOS, the system's own call rather than asking Finder, which needs a permission prompt.
+    #[cfg(target_os = "macos")]
+    trash::macos::TrashContextExtMacos::set_delete_method(&mut trash, trash::macos::DeleteMethod::NsFileManager);
+    trash.delete(&dir).map_err(|e| msg(format!("Couldn't move the instance to the Trash: {e}")))
+}
+
+#[cfg(all(test, target_os = "macos"))]
+mod tests {
+    /// Moves a throwaway instance to the real Trash, checks it arrived, then removes it there.
+    #[test]
+    fn moves_to_the_trash() {
+        let root = std::env::temp_dir().join(format!("clover-trash-{}", std::process::id()));
+        let paths = crate::paths::Paths::at(root.clone());
+        let instance = super::create(&paths, "Trash Test", "1.21.4", "vanilla", None).unwrap();
+        std::fs::write(paths.instance(&instance.id).join("world.txt"), "keep me").unwrap();
+        super::delete(&paths, &instance.id).unwrap();
+        assert!(!paths.instance(&instance.id).exists());
+        let trashed = std::path::PathBuf::from(std::env::var("HOME").unwrap()).join(".Trash").join(&instance.id);
+        assert_eq!(std::fs::read_to_string(trashed.join("world.txt")).unwrap(), "keep me");
+        std::fs::remove_dir_all(trashed).unwrap();
+        std::fs::remove_dir_all(root).unwrap();
+    }
 }

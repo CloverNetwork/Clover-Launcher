@@ -4,6 +4,7 @@
   import BlockIcon from "./BlockIcon.svelte";
   import Icon from "./Icon.svelte";
   import ModsSection from "./ModsSection.svelte";
+  import { SHOW_FOLDER } from "$lib/platform";
 
   let { instance }: { instance: Instance } = $props();
 
@@ -66,7 +67,7 @@
     <div><dt>Created</dt><dd>{formatDate(instance.createdAt)}</dd></div>
     <div>
       <dt>Game Folder</dt>
-      <dd><button class="link" onclick={() => launcher.showFolder(instance.id)}>Show in Finder</button></dd>
+      <dd><button class="link" onclick={() => launcher.showFolder(instance.id)}>{SHOW_FOLDER}</button></dd>
     </div>
   </dl>
 

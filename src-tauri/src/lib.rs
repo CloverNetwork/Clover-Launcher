@@ -373,7 +373,9 @@ fn get_accounts(state: State<'_, AppState>) -> auth::Accounts {
 /// Rebuilds the menu bar's account list after any account change.
 fn accounts_changed(app: &AppHandle, paths: &Paths) -> Result<auth::Accounts> {
     let accounts = auth::accounts(paths);
-    ui(menu::build(app, &accounts).and_then(|menu| app.set_menu(menu)))?;
+    if cfg!(target_os = "macos") {
+        ui(menu::build(app, &accounts).and_then(|menu| app.set_menu(menu)))?;
+    }
     Ok(accounts)
 }
 
@@ -504,6 +506,13 @@ pub fn run() {
                 let _ = main.set_focus();
             }
         }))
+        // Windows reopen where they were, at the size they were. The page decides when a
+        // window becomes visible, so that isn't restored.
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(tauri_plugin_window_state::StateFlags::all() & !tauri_plugin_window_state::StateFlags::VISIBLE)
+                .build(),
+        )
         .manage(PendingLaunch(std::sync::Mutex::new(shortcuts::launch_arg(std::env::args()))))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
@@ -515,7 +524,11 @@ pub fn run() {
                 .user_agent(concat!("CloverNetwork/Clover-Launcher/", env!("CARGO_PKG_VERSION")))
                 .build()?;
             let paths = Paths::new(app.path().app_data_dir()?)?;
-            app.set_menu(menu::build(app.handle(), &auth::accounts(&paths))?)?;
+            // Only macOS has a system menu bar. On Windows and Linux a menu would sit inside the
+            // window, which modern apps there don't do; the window handles the shortcuts instead.
+            if cfg!(target_os = "macos") {
+                app.set_menu(menu::build(app.handle(), &auth::accounts(&paths))?)?;
+            }
             app.manage(AppState { paths, http, sessions: auth::SessionCache::default() });
             app.on_menu_event(|app, event| menu::handle(app, event.id().as_ref()));
             if !chrome::decorated() {
@@ -523,6 +536,14 @@ pub fn run() {
                     main.set_decorations(false)?;
                 }
             }
+            // The page shows the window once drawn; if it can't, show it anyway.
+            let handle = app.handle().clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_secs(3));
+                if let Some(main) = handle.get_webview_window("main") {
+                    let _ = main.show();
+                }
+            });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
