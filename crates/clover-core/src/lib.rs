@@ -5,6 +5,7 @@
 pub mod auth;
 pub mod download;
 pub mod error;
+pub mod export;
 pub mod game;
 pub mod hooks;
 pub mod icon;
@@ -21,6 +22,7 @@ pub mod paths;
 pub mod profile;
 pub mod settings;
 pub mod skins;
+pub mod worlds;
 #[cfg(test)]
 mod smoke;
 

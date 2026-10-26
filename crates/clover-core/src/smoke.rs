@@ -258,7 +258,7 @@ async fn boots_imported_pack() {
     let imported = crate::modpacks::import(&sites, &paths, std::path::Path::new(&pack), &mut Print).await.unwrap();
     let instance = imported.instance;
     println!("  imported {} ({} {:?}, {} mods)", instance.name, instance.loader, instance.loader_version,
-        crate::mods::installed(&paths, &instance).unwrap().len());
+        crate::mods::installed(&crate::mods::Shelf::mods(&paths, &instance)).unwrap().len());
     let installed = crate::install::install(&client, &paths, &Settings::default(), &instance, Verify::Existing, &mut Print).await.unwrap();
     let mut command =
         launch::build_command(&paths, &instance, &installed.resolved, &session(), &Settings::default(), &installed.java).unwrap();

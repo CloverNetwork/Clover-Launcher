@@ -21,6 +21,7 @@
     popout: "M9 2.5h4.5V7M13.5 2.5L8 8M11.5 9.5v3a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3",
     gear: "M8 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM8 1.8v1.7M8 12.5v1.7M1.8 8h1.7M12.5 8h1.7M3.6 3.6l1.2 1.2M11.2 11.2l1.2 1.2M3.6 12.4l1.2-1.2M11.2 4.8l1.2-1.2",
     warning: "M8 2.5l6 10.5H2zM8 6.5v3M8 11.2v.3",
+    more: "M3.8 8h.4M7.8 8h.4M11.8 8h.4",
   } as const;
 
   let { name, size = 16 }: { name: keyof typeof paths; size?: number } = $props();

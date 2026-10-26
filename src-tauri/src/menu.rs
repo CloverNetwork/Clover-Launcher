@@ -41,6 +41,7 @@ pub fn build(app: &AppHandle, accounts: &Accounts) -> tauri::Result<Menu<Wry>> {
         .separator()
         .item(&item("edit_instance", "Edit Instance…", Some("CmdOrCtrl+I"))?)
         .item(&item("duplicate_instance", "Duplicate", Some("CmdOrCtrl+D"))?)
+        .item(&item("export_instance", "Export as Modpack…", None)?)
         .separator()
         .item(&item("show_folder", "Show in Finder", Some("CmdOrCtrl+Shift+R"))?)
         .item(&item("create_shortcut", SHORTCUT_LABEL, None)?)

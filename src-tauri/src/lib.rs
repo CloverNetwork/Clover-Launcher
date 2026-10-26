@@ -13,7 +13,7 @@ use clover_core::loaders::{self, LoaderSource, LoaderVersion};
 use clover_core::manifest::{self, VersionEntry};
 use clover_core::paths::Paths;
 use clover_core::settings::{self, Settings};
-use clover_core::{auth, hooks, install, launch, mclogs, modpacks, mods, skins};
+use clover_core::{auth, export, hooks, install, launch, mclogs, modpacks, mods, skins, worlds};
 use reqwest::Client;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_opener::OpenerExt;
@@ -236,37 +236,59 @@ fn game_log(logs: State<'_, GameLogs>, id: String) -> Vec<String> {
     logs.lines(&id)
 }
 
+/// Which folder a content command acts on: mods by default, or a kind of pack. Data packs
+/// also name their world.
+#[derive(Default, serde::Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+struct Place {
+    kind: mods::Kind,
+    world: Option<String>,
+}
+
+impl Place {
+    fn shelf(&self, paths: &Paths, instance: &Instance) -> Result<mods::Shelf> {
+        mods::Shelf::new(paths, instance, self.kind, self.world.as_deref())
+    }
+}
+
+fn sites<'a>(state: &'a AppState, settings: &'a Settings) -> mods::Sites<'a> {
+    mods::Sites { client: &state.http, curseforge_key: settings.curseforge_key() }
+}
+
 #[tauri::command]
 async fn search_mods(
     state: State<'_, AppState>,
     id: String,
+    place: Option<Place>,
     source: mods::Source,
     query: String,
     offset: u32,
 ) -> Result<mods::SearchPage> {
     let instance = instances::get(&state.paths, &id)?;
     let settings = settings::load(&state.paths);
-    let sites = mods::Sites { client: &state.http, curseforge_key: settings.curseforge_key() };
-    mods::search(&sites, &mods::Target::for_instance(&instance)?, source, &query, offset).await
+    let target = mods::Target::new(&instance, place.unwrap_or_default().kind)?;
+    mods::search(&sites(&state, &settings), &target, source, &query, offset).await
+}
+
+#[tauri::command]
+fn list_mods(state: State<'_, AppState>, id: String, place: Option<Place>) -> Result<Vec<mods::InstalledMod>> {
+    let instance = instances::get(&state.paths, &id)?;
+    mods::installed(&place.unwrap_or_default().shelf(&state.paths, &instance)?)
+}
+
+/// Installs a mod or pack, and a mod's required dependencies. Returns the titles of what was added.
+#[tauri::command]
+async fn install_mod(state: State<'_, AppState>, id: String, place: Option<Place>, source: mods::Source, project: String) -> Result<Vec<String>> {
+    let instance = instances::get(&state.paths, &id)?;
+    let place = place.unwrap_or_default();
+    let settings = settings::load(&state.paths);
+    let (shelf, target) = (place.shelf(&state.paths, &instance)?, mods::Target::new(&instance, place.kind)?);
+    mods::install(&sites(&state, &settings), &shelf, &target, source, &project).await
 }
 
 #[tauri::command]
 async fn check_curseforge_key(state: State<'_, AppState>, key: String) -> Result<()> {
     mods::check_curseforge_key(&state.http, &key).await
-}
-
-#[tauri::command]
-fn list_mods(state: State<'_, AppState>, id: String) -> Result<Vec<mods::InstalledMod>> {
-    mods::installed(&state.paths, &instances::get(&state.paths, &id)?)
-}
-
-/// Installs a mod and its required dependencies. Returns the titles of what was added.
-#[tauri::command]
-async fn install_mod(state: State<'_, AppState>, id: String, source: mods::Source, project: String) -> Result<Vec<String>> {
-    let instance = instances::get(&state.paths, &id)?;
-    let settings = settings::load(&state.paths);
-    let sites = mods::Sites { client: &state.http, curseforge_key: settings.curseforge_key() };
-    mods::install(&sites, &state.paths, &instance, source, &project).await
 }
 
 #[tauri::command]
@@ -298,39 +320,109 @@ async fn import_modpack_file(app: AppHandle, state: State<'_, AppState>, path: S
 }
 
 #[tauri::command]
-async fn check_mod_updates(state: State<'_, AppState>, id: String) -> Result<mods::UpdateCheck> {
+async fn check_mod_updates(state: State<'_, AppState>, id: String, place: Option<Place>) -> Result<mods::UpdateCheck> {
     let instance = instances::get(&state.paths, &id)?;
+    let place = place.unwrap_or_default();
     let settings = settings::load(&state.paths);
-    let sites = mods::Sites { client: &state.http, curseforge_key: settings.curseforge_key() };
-    mods::check_updates(&sites, &state.paths, &instance).await
+    let (shelf, target) = (place.shelf(&state.paths, &instance)?, mods::Target::new(&instance, place.kind)?);
+    mods::check_updates(&sites(&state, &settings), &shelf, &target).await
 }
 
 /// Applies updates one after another. Returns the titles of everything updated or added.
 #[tauri::command]
-async fn update_mods(state: State<'_, AppState>, running: State<'_, Running>, id: String, updates: Vec<mods::ModUpdate>) -> Result<Vec<String>> {
-    if running.is_running(&id) {
+async fn update_mods(
+    state: State<'_, AppState>,
+    running: State<'_, Running>,
+    id: String,
+    place: Option<Place>,
+    updates: Vec<mods::ModUpdate>,
+) -> Result<Vec<String>> {
+    let place = place.unwrap_or_default();
+    if running.is_running(&id) && place.kind == mods::Kind::Mod {
         return Err(msg("Quit the game before updating its mods."));
     }
     let instance = instances::get(&state.paths, &id)?;
     let settings = settings::load(&state.paths);
-    let sites = mods::Sites { client: &state.http, curseforge_key: settings.curseforge_key() };
-    mods::update_all(&sites, &state.paths, &instance, &updates).await
+    let (shelf, target) = (place.shelf(&state.paths, &instance)?, mods::Target::new(&instance, place.kind)?);
+    mods::update_all(&sites(&state, &settings), &shelf, &target, &updates).await
 }
 
 #[tauri::command]
-fn set_mod_enabled(state: State<'_, AppState>, id: String, file: String, enabled: bool) -> Result<()> {
-    mods::set_enabled(&state.paths, &instances::get(&state.paths, &id)?, &file, enabled)
+fn set_mod_enabled(state: State<'_, AppState>, id: String, place: Option<Place>, file: String, enabled: bool) -> Result<()> {
+    let instance = instances::get(&state.paths, &id)?;
+    mods::set_enabled(&place.unwrap_or_default().shelf(&state.paths, &instance)?, &file, enabled)
 }
 
 #[tauri::command]
-fn remove_mod(state: State<'_, AppState>, id: String, file: String) -> Result<()> {
-    mods::remove(&state.paths, &instances::get(&state.paths, &id)?, &file)
+fn remove_mod(state: State<'_, AppState>, id: String, place: Option<Place>, file: String) -> Result<()> {
+    let instance = instances::get(&state.paths, &id)?;
+    mods::remove(&place.unwrap_or_default().shelf(&state.paths, &instance)?, &file)
 }
 
 #[tauri::command]
-fn show_mods_folder(app: AppHandle, state: State<'_, AppState>, id: String) -> Result<()> {
-    let dir = mods::folder(&state.paths, &instances::get(&state.paths, &id)?)?;
+fn show_mods_folder(app: AppHandle, state: State<'_, AppState>, id: String, place: Option<Place>) -> Result<()> {
+    let instance = instances::get(&state.paths, &id)?;
+    let dir = mods::folder(&place.unwrap_or_default().shelf(&state.paths, &instance)?)?;
     app.opener().open_path(dir.to_string_lossy(), None::<&str>).map_err(|e| msg(e.to_string()))
+}
+
+#[tauri::command]
+fn list_worlds(state: State<'_, AppState>, id: String) -> Result<Vec<worlds::World>> {
+    worlds::list(&state.paths, &instances::get(&state.paths, &id)?)
+}
+
+/// Zips a world into the instance's backups folder and shows the zip in the file manager.
+#[tauri::command]
+async fn backup_world(app: AppHandle, state: State<'_, AppState>, id: String, folder: String, label: String) -> Result<()> {
+    let instance = instances::get(&state.paths, &id)?;
+    let paths = state.paths.clone();
+    let zip = tauri::async_runtime::spawn_blocking(move || worlds::backup(&paths, &instance, &folder, &label))
+        .await
+        .map_err(|e| msg(e.to_string()))??;
+    app.opener().reveal_item_in_dir(zip).map_err(|e| msg(e.to_string()))
+}
+
+#[tauri::command]
+fn trash_world(state: State<'_, AppState>, running: State<'_, Running>, id: String, folder: String) -> Result<()> {
+    if running.is_running(&id) {
+        return Err(msg("Quit the game before moving a world to the Trash."));
+    }
+    worlds::trash(&state.paths, &instances::get(&state.paths, &id)?, &folder)
+}
+
+#[tauri::command]
+fn show_world(app: AppHandle, state: State<'_, AppState>, id: String, folder: String) -> Result<()> {
+    let dir = worlds::world_dir(&state.paths, &instances::get(&state.paths, &id)?, &folder)?;
+    app.opener().reveal_item_in_dir(dir).map_err(|e| msg(e.to_string()))
+}
+
+#[tauri::command]
+fn list_screenshots(state: State<'_, AppState>, id: String) -> Result<Vec<worlds::Screenshot>> {
+    worlds::screenshots(&state.paths, &instances::get(&state.paths, &id)?)
+}
+
+/// Opens a screenshot in the system's image viewer, or reveals it with `reveal`.
+#[tauri::command]
+fn open_screenshot(app: AppHandle, state: State<'_, AppState>, id: String, file: String, reveal: bool) -> Result<()> {
+    let path = worlds::screenshot_path(&state.paths, &instances::get(&state.paths, &id)?, &file)?;
+    let opener = app.opener();
+    if reveal { opener.reveal_item_in_dir(path) } else { opener.open_path(path.to_string_lossy(), None::<&str>) }.map_err(|e| msg(e.to_string()))
+}
+
+#[tauri::command]
+fn trash_screenshot(state: State<'_, AppState>, id: String, file: String) -> Result<()> {
+    worlds::trash_screenshot(&state.paths, &instances::get(&state.paths, &id)?, &file)
+}
+
+/// Writes the instance as a .mrpack where the person chose, then shows it.
+#[tauri::command]
+async fn export_modpack(app: AppHandle, state: State<'_, AppState>, id: String, path: String) -> Result<export::Exported> {
+    let instance = instances::get(&state.paths, &id)?;
+    let settings = settings::load(&state.paths);
+    let out = std::path::PathBuf::from(path);
+    let exported = export::export(&sites(&state, &settings), &state.paths, &instance, &out).await?;
+    let _ = app.opener().reveal_item_in_dir(out);
+    Ok(exported)
 }
 
 /// Shares an instance's log on mclo.gs, with access tokens and the home folder removed.
@@ -604,6 +696,14 @@ pub fn run() {
             set_mod_enabled,
             remove_mod,
             show_mods_folder,
+            list_worlds,
+            backup_world,
+            trash_world,
+            show_world,
+            list_screenshots,
+            open_screenshot,
+            trash_screenshot,
+            export_modpack,
             upload_log,
             open_log_window,
             pop_in_log_window,

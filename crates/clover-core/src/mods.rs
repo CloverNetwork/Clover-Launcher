@@ -1,9 +1,10 @@
-//! Mods from Modrinth and CurseForge, installed into an instance's `mods` folder.
+//! Mods, resource packs, shader packs and data packs from Modrinth and CurseForge.
 //! References: https://docs.modrinth.com/api/ and https://docs.curseforge.com/rest-api/
 //!
-//! Each instance keeps `mods.json` beside its game folder with where each file came
-//! from. Jars someone drops into the folder by hand still show up, just without a source.
-//! Disabling a mod renames `name.jar` to `name.jar.disabled`, as other launchers do.
+//! Each kind has its folder in the game folder (data packs live inside a world) and a
+//! record beside it of where each file came from. Files someone drops into a folder by hand
+//! still show up, just without a source. Turning one off renames `name.jar` to
+//! `name.jar.disabled`, as other launchers do.
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -21,7 +22,6 @@ use crate::paths::Paths;
 pub(crate) const MODRINTH: &str = "https://api.modrinth.com/v2";
 pub(crate) const CURSEFORGE: &str = "https://api.curseforge.com/v1";
 pub(crate) const CURSEFORGE_MINECRAFT: u32 = 432;
-const CURSEFORGE_MODS_CLASS: u32 = 6;
 pub(crate) const PAGE_SIZE: u32 = 20;
 /// Dependencies of dependencies are followed, but not forever.
 const MAX_DEPENDENCY_DEPTH: usize = 6;
@@ -53,11 +53,62 @@ pub struct SearchPage {
     pub total: u64,
 }
 
-/// A file in the instance's mods folder.
+/// What a file is, which decides its folder and which projects fit.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Kind {
+    #[default]
+    Mod,
+    Resourcepack,
+    Shader,
+    Datapack,
+}
+
+impl Kind {
+    fn modrinth_type(self) -> &'static str {
+        match self {
+            Kind::Mod => "mod",
+            Kind::Resourcepack => "resourcepack",
+            Kind::Shader => "shader",
+            Kind::Datapack => "datapack",
+        }
+    }
+
+    /// CurseForge's class IDs for Minecraft.
+    pub(crate) fn curseforge_class(self) -> u32 {
+        match self {
+            Kind::Mod => 6,
+            Kind::Resourcepack => 12,
+            Kind::Shader => 6552,
+            Kind::Datapack => 6945,
+        }
+    }
+
+    pub(crate) fn from_curseforge_class(class: Option<u64>) -> Self {
+        match class {
+            Some(12) => Kind::Resourcepack,
+            Some(6552) => Kind::Shader,
+            Some(6945) => Kind::Datapack,
+            _ => Kind::Mod,
+        }
+    }
+
+    /// The folder in the game folder; data packs' folder is inside a world.
+    pub(crate) fn folder(self) -> &'static str {
+        match self {
+            Kind::Mod => "mods",
+            Kind::Resourcepack => "resourcepacks",
+            Kind::Shader => "shaderpacks",
+            Kind::Datapack => "datapacks",
+        }
+    }
+}
+
+/// A file in one of the instance's content folders.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InstalledMod {
-    /// The jar's name, without ".disabled".
+    /// The file's name, without ".disabled". Packs can also be folders.
     pub file: String,
     pub title: String,
     pub source: Option<Source>,
@@ -71,8 +122,9 @@ pub struct InstalledMod {
     pub enabled: bool,
 }
 
-/// What a mod has to match: the game version and the loader's names on each site.
+/// What a file has to match: the game version and, for mods, the loader's names on each site.
 pub struct Target {
+    kind: Kind,
     game: String,
     modrinth_loaders: Vec<&'static str>,
     curseforge_loader: Option<u32>,
@@ -80,6 +132,19 @@ pub struct Target {
 
 impl Target {
     pub fn for_instance(instance: &Instance) -> Result<Self> {
+        Self::new(instance, Kind::Mod)
+    }
+
+    pub fn new(instance: &Instance, kind: Kind) -> Result<Self> {
+        let game = instance.version.clone();
+        // Modrinth files say what reads them: the game itself, a shader mod, or a data pack.
+        let packs = |loaders: &[&'static str]| Ok(Self { kind, game: game.clone(), modrinth_loaders: loaders.to_vec(), curseforge_loader: None });
+        match kind {
+            Kind::Mod => {}
+            Kind::Resourcepack => return packs(&["minecraft"]),
+            Kind::Shader => return packs(&["iris", "optifine"]),
+            Kind::Datapack => return packs(&["datapack"]),
+        }
         // Quilt loads Fabric mods, so Fabric mods count as compatible with it.
         let (modrinth, curseforge): (&[&'static str], Option<u32>) = match instance.loader.as_str() {
             "fabric" => (&["fabric"], Some(4)),
@@ -93,11 +158,44 @@ impl Target {
             id if id.starts_with("custom-") => (&["fabric"], Some(4)),
             _ => return Err(msg("Mods need a mod loader. Create an instance with one, such as Fabric or NeoForge.")),
         };
-        Ok(Self { game: instance.version.clone(), modrinth_loaders: modrinth.to_vec(), curseforge_loader: curseforge })
+        Ok(Self { kind, game, modrinth_loaders: modrinth.to_vec(), curseforge_loader: curseforge })
     }
 
-    fn curseforge_loader(&self) -> Result<u32> {
-        self.curseforge_loader.ok_or_else(|| msg("CurseForge doesn't list mods for this loader. Try Modrinth."))
+    /// The loader filter for CurseForge, which only mods have.
+    fn curseforge_loader(&self) -> Result<Option<u32>> {
+        if self.kind != Kind::Mod {
+            return Ok(None);
+        }
+        self.curseforge_loader.map(Some).ok_or_else(|| msg("CurseForge doesn't list mods for this loader. Try Modrinth."))
+    }
+}
+
+/// One kind's folder in an instance and the record of where its files came from.
+pub struct Shelf {
+    pub kind: Kind,
+    dir: PathBuf,
+    records: PathBuf,
+}
+
+impl Shelf {
+    pub fn mods(paths: &Paths, instance: &Instance) -> Self {
+        Self::new(paths, instance, Kind::Mod, None).expect("mods need no world")
+    }
+
+    /// Data packs belong to a world, named by its folder.
+    pub fn new(paths: &Paths, instance: &Instance, kind: Kind, world: Option<&str>) -> Result<Self> {
+        let game = paths.instance(&instance.id).join("minecraft");
+        if kind != Kind::Datapack {
+            let records = paths.instance(&instance.id).join(format!("{}.json", kind.folder()));
+            return Ok(Self { kind, dir: game.join(kind.folder()), records });
+        }
+        let world = world.ok_or_else(|| msg("Data packs belong to a world. Choose one first."))?;
+        let dir = crate::worlds::world_dir(paths, instance, world)?;
+        Ok(Self { kind, records: dir.join("clover-datapacks.json"), dir: dir.join("datapacks") })
+    }
+
+    pub fn dir(&self) -> &Path {
+        &self.dir
     }
 }
 
@@ -148,8 +246,13 @@ pub async fn check_curseforge_key(client: &Client, key: &str) -> Result<()> {
 pub async fn search(sites: &Sites<'_>, target: &Target, source: Source, query: &str, offset: u32) -> Result<SearchPage> {
     match source {
         Source::Modrinth => {
-            let loaders: Vec<String> = target.modrinth_loaders.iter().map(|l| format!("categories:{l}")).collect();
-            let facets = serde_json::json!([["project_type:mod"], [format!("versions:{}", target.game)], loaders]);
+            let kind = target.kind.modrinth_type();
+            let mut facets = vec![vec![format!("project_type:{kind}")], vec![format!("versions:{}", target.game)]];
+            // Every resource pack works with the plain game, so only the others filter by loader.
+            if target.kind != Kind::Resourcepack {
+                facets.push(target.modrinth_loaders.iter().map(|l| format!("categories:{l}")).collect());
+            }
+            let facets = serde_json::json!(facets);
             let index = if query.trim().is_empty() { "downloads" } else { "relevance" };
             let res = json(sites.client.get(format!("{MODRINTH}/search")).query(&[
                 ("query", query),
@@ -172,7 +275,7 @@ pub async fn search(sites: &Sites<'_>, target: &Target, source: Source, query: &
                         description: text(h, "description"),
                         icon_url: h["icon_url"].as_str().filter(|u| !u.is_empty()).map(String::from),
                         downloads: h["downloads"].as_u64().unwrap_or(0),
-                        page_url: format!("https://modrinth.com/mod/{}", text(h, "slug")),
+                        page_url: format!("https://modrinth.com/{kind}/{}", text(h, "slug")),
                     })
                     .collect(),
             })
@@ -181,18 +284,20 @@ pub async fn search(sites: &Sites<'_>, target: &Target, source: Source, query: &
             let loader = target.curseforge_loader()?;
             // Sort field 2 is popularity; it suits an empty search, relevance suits a typed one.
             let sort = if query.trim().is_empty() { "2" } else { "1" };
-            let res = json(sites.curseforge(format!("{CURSEFORGE}/mods/search"))?.query(&[
+            let mut request = sites.curseforge(format!("{CURSEFORGE}/mods/search"))?.query(&[
                 ("gameId", CURSEFORGE_MINECRAFT.to_string()),
-                ("classId", CURSEFORGE_MODS_CLASS.to_string()),
+                ("classId", target.kind.curseforge_class().to_string()),
                 ("searchFilter", query.to_string()),
                 ("gameVersion", target.game.clone()),
-                ("modLoaderType", loader.to_string()),
                 ("sortField", sort.into()),
                 ("sortOrder", "desc".into()),
                 ("pageSize", PAGE_SIZE.to_string()),
                 ("index", offset.to_string()),
-            ]))
-            .await?;
+            ]);
+            if let Some(loader) = loader {
+                request = request.query(&[("modLoaderType", loader)]);
+            }
+            let res = json(request).await?;
             let hits = res["data"].as_array().cloned().unwrap_or_default();
             Ok(SearchPage {
                 total: res["pagination"]["totalCount"].as_u64().unwrap_or(0),
@@ -239,13 +344,7 @@ async fn resolve_modrinth(sites: &Sites<'_>, target: &Target, project: &str) -> 
         .ok_or_else(|| msg(format!("{} has no version for Minecraft {} with this loader.", text(&info, "title"), target.game)))?;
     let files = version["files"].as_array().cloned().unwrap_or_default();
     let file = files.iter().find(|f| f["primary"] == true).or(files.first()).ok_or_else(|| msg("That version has no file."))?;
-    let requires = version["dependencies"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter(|d| d["dependency_type"] == "required")
-        .filter_map(|d| d["project_id"].as_str().map(String::from))
-        .collect();
+    let requires = if target.kind == Kind::Mod { required_on_modrinth(version) } else { vec![] };
     Ok(Resolved {
         record: InstalledMod {
             file: text(file, "filename"),
@@ -266,12 +365,12 @@ async fn resolve_modrinth(sites: &Sites<'_>, target: &Target, project: &str) -> 
 async fn resolve_curseforge(sites: &Sites<'_>, target: &Target, project: &str) -> Result<Resolved> {
     let loader = target.curseforge_loader()?;
     let info = json(sites.curseforge(format!("{CURSEFORGE}/mods/{project}"))?).await?["data"].clone();
-    let files = json(sites.curseforge(format!("{CURSEFORGE}/mods/{project}/files"))?.query(&[
-        ("gameVersion", target.game.clone()),
-        ("modLoaderType", loader.to_string()),
-        ("pageSize", "50".into()),
-    ]))
-    .await?;
+    let mut request =
+        sites.curseforge(format!("{CURSEFORGE}/mods/{project}/files"))?.query(&[("gameVersion", target.game.clone()), ("pageSize", "50".into())]);
+    if let Some(loader) = loader {
+        request = request.query(&[("modLoaderType", loader)]);
+    }
+    let files = json(request).await?;
     let mut files = files["data"].as_array().cloned().unwrap_or_default();
     files.sort_by(|a, b| text(b, "fileDate").cmp(&text(a, "fileDate")));
     // Release type 1 is a release; 2 and 3 are beta and alpha.
@@ -288,14 +387,18 @@ async fn resolve_curseforge(sites: &Sites<'_>, target: &Target, project: &str) -
         ))
     })?;
     let sha1 = file["hashes"].as_array().into_iter().flatten().find(|h| h["algo"] == 1).map(|h| text(h, "value"));
-    // Relation type 3 is a required dependency.
-    let requires = file["dependencies"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter(|d| d["relationType"] == 3)
-        .filter_map(|d| d["modId"].as_u64().map(|id| id.to_string()))
-        .collect();
+    // Relation type 3 is a required dependency. Packs' "dependencies" are mods, which don't belong in their folder.
+    let requires = if target.kind != Kind::Mod {
+        vec![]
+    } else {
+        file["dependencies"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|d| d["relationType"] == 3)
+            .filter_map(|d| d["modId"].as_u64().map(|id| id.to_string()))
+            .collect()
+    };
     Ok(Resolved {
         record: InstalledMod {
             file: text(file, "fileName"),
@@ -313,40 +416,52 @@ async fn resolve_curseforge(sites: &Sites<'_>, target: &Target, project: &str) -
     })
 }
 
-fn mods_dir(paths: &Paths, instance: &Instance) -> PathBuf {
-    paths.instance(&instance.id).join("minecraft").join("mods")
+fn required_on_modrinth(version: &Value) -> Vec<String> {
+    version["dependencies"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|d| d["dependency_type"] == "required")
+        .filter_map(|d| d["project_id"].as_str().map(String::from))
+        .collect()
 }
 
-fn records_file(paths: &Paths, instance: &Instance) -> PathBuf {
-    paths.instance(&instance.id).join("mods.json")
+fn load_records(shelf: &Shelf) -> Vec<InstalledMod> {
+    std::fs::read(&shelf.records).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default()
 }
 
-fn load_records(paths: &Paths, instance: &Instance) -> Vec<InstalledMod> {
-    std::fs::read(records_file(paths, instance)).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default()
-}
-
-pub(crate) fn save_records(paths: &Paths, instance: &Instance, records: &[InstalledMod]) -> Result<()> {
-    std::fs::write(records_file(paths, instance), serde_json::to_vec_pretty(records)?)?;
+pub(crate) fn save_records(shelf: &Shelf, records: &[InstalledMod]) -> Result<()> {
+    std::fs::write(&shelf.records, serde_json::to_vec_pretty(records)?)?;
     Ok(())
 }
 
-/// The mods folder as it is now, with what's known about each file.
-pub fn installed(paths: &Paths, instance: &Instance) -> Result<Vec<InstalledMod>> {
-    let records = load_records(paths, instance);
-    let dir = mods_dir(paths, instance);
-    let Ok(entries) = std::fs::read_dir(&dir) else { return Ok(vec![]) };
+/// Whether a name in a folder is something the game reads: jars for mods; zips or
+/// unpacked folders for packs.
+fn is_content(shelf: &Shelf, name: &str, is_dir: bool) -> bool {
+    match shelf.kind {
+        Kind::Mod => name.ends_with(".jar") && !is_dir,
+        _ => !name.starts_with('.') && (is_dir || name.ends_with(".zip")),
+    }
+}
+
+/// A folder as it is now, with what's known about each file.
+pub fn installed(shelf: &Shelf) -> Result<Vec<InstalledMod>> {
+    let records = load_records(shelf);
+    let Ok(entries) = std::fs::read_dir(&shelf.dir) else { return Ok(vec![]) };
     let mut mods: Vec<InstalledMod> = entries
         .filter_map(|entry| {
-            let name = entry.ok()?.file_name().to_string_lossy().into_owned();
+            let entry = entry.ok()?;
+            let is_dir = entry.file_type().ok()?.is_dir();
+            let name = entry.file_name().to_string_lossy().into_owned();
             let (file, enabled) = match name.strip_suffix(".disabled") {
                 Some(file) => (file.to_string(), false),
                 None => (name, true),
             };
-            if !file.ends_with(".jar") {
+            if !is_content(shelf, &file, is_dir) {
                 return None;
             }
             let mut record = records.iter().find(|r| r.file == file).cloned().unwrap_or_else(|| InstalledMod {
-                title: file.trim_end_matches(".jar").to_string(),
+                title: file.trim_end_matches(".jar").trim_end_matches(".zip").to_string(),
                 file: file.clone(),
                 source: None,
                 project_id: None,
@@ -364,25 +479,24 @@ pub fn installed(paths: &Paths, instance: &Instance) -> Result<Vec<InstalledMod>
 }
 
 /// Installs a project's best matching file and everything it requires.
-/// Returns the titles of what was added, the picked mod first.
-pub async fn install(sites: &Sites<'_>, paths: &Paths, instance: &Instance, source: Source, project: &str) -> Result<Vec<String>> {
-    install_queue(sites, paths, instance, source, vec![(project.to_string(), 0)]).await
+/// Returns the titles of what was added, the picked one first.
+pub async fn install(sites: &Sites<'_>, shelf: &Shelf, target: &Target, source: Source, project: &str) -> Result<Vec<String>> {
+    install_queue(sites, shelf, target, source, vec![(project.to_string(), 0)]).await
 }
 
 /// Installs projects and what they require. Depth 0 is a picked mod (updated if present);
 /// deeper entries are dependencies, left alone when already installed.
 async fn install_queue(
     sites: &Sites<'_>,
-    paths: &Paths,
-    instance: &Instance,
+    shelf: &Shelf,
+    target: &Target,
     source: Source,
     mut queue: Vec<(String, usize)>,
 ) -> Result<Vec<String>> {
-    let target = Target::for_instance(instance)?;
-    let dir = mods_dir(paths, instance);
-    std::fs::create_dir_all(&dir)?;
-    let mut records = load_records(paths, instance);
-    let present: HashSet<String> = installed(paths, instance)?.into_iter().map(|m| m.file).collect();
+    let dir = &shelf.dir;
+    std::fs::create_dir_all(dir)?;
+    let mut records = load_records(shelf);
+    let present: HashSet<String> = installed(shelf)?.into_iter().map(|m| m.file).collect();
     let mut added = Vec::new();
     let mut seen = HashSet::new();
 
@@ -396,9 +510,10 @@ async fn install_queue(
             continue;
         }
         let resolved = match source {
-            Source::Modrinth => resolve_modrinth(sites, &target, &project).await?,
-            Source::Curseforge => resolve_curseforge(sites, &target, &project).await?,
+            Source::Modrinth => resolve_modrinth(sites, target, &project).await?,
+            Source::Curseforge => resolve_curseforge(sites, target, &project).await?,
         };
+        check_file_name(shelf.kind, &resolved.record.file)?;
         let id = resolved.record.project_id.clone();
         // Replace an older file of the same project.
         for old in records.iter().filter(|r| r.source == Some(source) && r.project_id == id && r.file != resolved.record.file) {
@@ -415,7 +530,7 @@ async fn install_queue(
         queue.extend(resolved.requires.into_iter().map(|p| (p, depth + 1)));
     }
 
-    save_records(paths, instance, &records)?;
+    save_records(shelf, &records)?;
     Ok(added)
 }
 
@@ -453,19 +568,18 @@ fn file_on_disk(dir: &Path, file: &str) -> PathBuf {
     if enabled.exists() { enabled } else { dir.join(format!("{file}.disabled")) }
 }
 
-/// Looks for newer versions of every mod. Modrinth is asked about every jar by its hash,
-/// so it also finds updates for mods added by hand; CurseForge mods are checked one by one.
-pub async fn check_updates(sites: &Sites<'_>, paths: &Paths, instance: &Instance) -> Result<UpdateCheck> {
-    let target = Target::for_instance(instance)?;
-    let dir = mods_dir(paths, instance);
-    let mods = installed(paths, instance)?;
+/// Looks for newer versions of every file. Modrinth is asked about every file by its hash,
+/// so it also finds updates for ones added by hand; CurseForge's are checked one by one.
+pub async fn check_updates(sites: &Sites<'_>, shelf: &Shelf, target: &Target) -> Result<UpdateCheck> {
+    let dir = &shelf.dir;
+    let mods = installed(shelf)?;
     let mut updates = Vec::new();
     let mut skipped = None;
 
     let by_hash: HashMap<String, &InstalledMod> = mods
         .iter()
         .filter(|m| m.source != Some(Source::Curseforge))
-        .filter_map(|m| Some((hex::encode(Sha1::digest(std::fs::read(file_on_disk(&dir, &m.file)).ok()?)), m)))
+        .filter_map(|m| Some((hex::encode(Sha1::digest(std::fs::read(file_on_disk(dir, &m.file)).ok()?)), m)))
         .collect();
     if !by_hash.is_empty() {
         let hashes: Vec<&String> = by_hash.keys().collect();
@@ -500,13 +614,7 @@ pub async fn check_updates(sites: &Sites<'_>, paths: &Paths, instance: &Instance
                 url: text(file, "url"),
                 sha1: file["hashes"]["sha1"].as_str().map(String::from),
                 icon_url: installed.icon_url.clone(),
-                requires: new["dependencies"]
-                    .as_array()
-                    .into_iter()
-                    .flatten()
-                    .filter(|d| d["dependency_type"] == "required")
-                    .filter_map(|d| d["project_id"].as_str().map(String::from))
-                    .collect(),
+                requires: if target.kind == Kind::Mod { required_on_modrinth(new) } else { vec![] },
             });
         }
         // Mods added by hand only have a file name; use the project's real name and icon.
@@ -526,12 +634,12 @@ pub async fn check_updates(sites: &Sites<'_>, paths: &Paths, instance: &Instance
     let from_curseforge: Vec<&InstalledMod> = mods.iter().filter(|m| m.source == Some(Source::Curseforge)).collect();
     if !from_curseforge.is_empty() {
         if sites.curseforge_key.is_none() {
-            skipped = Some("CurseForge mods weren't checked because there's no CurseForge API key.".into());
+            skipped = Some("Files from CurseForge weren't checked because there's no CurseForge API key.".into());
         } else {
             for installed in from_curseforge {
                 let Some(project) = &installed.project_id else { continue };
                 // A mod whose newest file can't be downloaded here is skipped, not an error.
-                let Ok(newest) = resolve_curseforge(sites, &target, project).await else { continue };
+                let Ok(newest) = resolve_curseforge(sites, target, project).await else { continue };
                 if newest.record.file == installed.file {
                     continue;
                 }
@@ -558,14 +666,14 @@ pub async fn check_updates(sites: &Sites<'_>, paths: &Paths, instance: &Instance
 
 /// Swaps an installed mod for the newer file from `check_updates`, keeping it on or off
 /// as it was, then installs anything the new version newly requires.
-pub async fn update(sites: &Sites<'_>, paths: &Paths, instance: &Instance, update: &ModUpdate) -> Result<Vec<String>> {
-    check_file_name(&update.file)?;
-    check_file_name(&update.new_file)?;
+pub async fn update(sites: &Sites<'_>, shelf: &Shelf, target: &Target, update: &ModUpdate) -> Result<Vec<String>> {
+    check_file_name(shelf.kind, &update.file)?;
+    check_file_name(shelf.kind, &update.new_file)?;
     let trusted = ["https://cdn.modrinth.com/", "https://edge.forgecdn.net/", "https://mediafilez.forgecdn.net/"];
     if !trusted.iter().any(|host| update.url.starts_with(host)) {
         return Err(msg("That update doesn't come from Modrinth or CurseForge."));
     }
-    let dir = mods_dir(paths, instance);
+    let dir = &shelf.dir;
     let was_enabled = !dir.join(format!("{}.disabled", update.file)).exists();
     let new_path = dir.join(&update.new_file);
     download::fetch(sites.client, Task { url: update.url.clone(), path: new_path.clone(), sha1: update.sha1.clone() }, Verify::Full)
@@ -578,7 +686,7 @@ pub async fn update(sites: &Sites<'_>, paths: &Paths, instance: &Instance, updat
         std::fs::rename(&new_path, dir.join(format!("{}.disabled", update.new_file)))?;
     }
 
-    let mut records = load_records(paths, instance);
+    let mut records = load_records(shelf);
     let dependency = records.iter().find(|r| r.file == update.file).is_some_and(|r| r.dependency);
     records.retain(|r| r.file != update.file && !(r.source == Some(update.source) && r.project_id.as_deref() == Some(update.project_id.as_str())));
     records.push(InstalledMod {
@@ -591,26 +699,26 @@ pub async fn update(sites: &Sites<'_>, paths: &Paths, instance: &Instance, updat
         dependency,
         enabled: was_enabled,
     });
-    save_records(paths, instance, &records)?;
+    save_records(shelf, &records)?;
 
     let mut added = vec![update.title.clone()];
     let needed = update.requires.iter().map(|p| (p.clone(), 1)).collect();
-    added.extend(install_queue(sites, paths, instance, update.source, needed).await?);
+    added.extend(install_queue(sites, shelf, target, update.source, needed).await?);
     Ok(added)
 }
 
 /// Applies updates one after another. Returns the titles of everything updated or added.
-pub async fn update_all(sites: &Sites<'_>, paths: &Paths, instance: &Instance, updates: &[ModUpdate]) -> Result<Vec<String>> {
+pub async fn update_all(sites: &Sites<'_>, shelf: &Shelf, target: &Target, updates: &[ModUpdate]) -> Result<Vec<String>> {
     let mut changed = Vec::new();
     for item in updates {
-        changed.extend(update(sites, paths, instance, item).await?);
+        changed.extend(update(sites, shelf, target, item).await?);
     }
     Ok(changed)
 }
 
-pub fn set_enabled(paths: &Paths, instance: &Instance, file: &str, enabled: bool) -> Result<()> {
-    check_file_name(file)?;
-    let dir = mods_dir(paths, instance);
+pub fn set_enabled(shelf: &Shelf, file: &str, enabled: bool) -> Result<()> {
+    check_file_name(shelf.kind, file)?;
+    let dir = &shelf.dir;
     let (on, off) = (dir.join(file), dir.join(format!("{file}.disabled")));
     let (from, to) = if enabled { (off, on) } else { (on, off) };
     if from.exists() {
@@ -619,28 +727,33 @@ pub fn set_enabled(paths: &Paths, instance: &Instance, file: &str, enabled: bool
     Ok(())
 }
 
-pub fn remove(paths: &Paths, instance: &Instance, file: &str) -> Result<()> {
-    check_file_name(file)?;
-    let dir = mods_dir(paths, instance);
-    let _ = std::fs::remove_file(dir.join(file));
-    let _ = std::fs::remove_file(dir.join(format!("{file}.disabled")));
-    let mut records = load_records(paths, instance);
+pub fn remove(shelf: &Shelf, file: &str) -> Result<()> {
+    check_file_name(shelf.kind, file)?;
+    for path in [shelf.dir.join(file), shelf.dir.join(format!("{file}.disabled"))] {
+        // An unpacked pack is a folder someone may have made themselves, so it goes to the Trash.
+        if path.is_dir() {
+            crate::instances::move_to_trash(&path)?;
+        } else {
+            let _ = std::fs::remove_file(path);
+        }
+    }
+    let mut records = load_records(shelf);
     records.retain(|r| r.file != file);
-    save_records(paths, instance, &records)
+    save_records(shelf, &records)
 }
 
-/// Mod files are named by the sites; never let one reach outside the mods folder.
-fn check_file_name(file: &str) -> Result<()> {
-    if file.is_empty() || file.contains(['/', '\\']) || file.starts_with('.') || !file.ends_with(".jar") {
-        return Err(msg("That isn't a mod file."));
+/// File names come from the sites; never let one reach outside its folder.
+fn check_file_name(kind: Kind, file: &str) -> Result<()> {
+    let safe = !file.is_empty() && !file.contains(['/', '\\']) && !file.starts_with('.');
+    if !safe || (kind == Kind::Mod && !file.ends_with(".jar")) {
+        return Err(msg(if kind == Kind::Mod { "That isn't a mod file." } else { "That isn't a pack file." }));
     }
     Ok(())
 }
 
-pub fn folder(paths: &Paths, instance: &Instance) -> Result<PathBuf> {
-    let dir = mods_dir(paths, instance);
-    std::fs::create_dir_all(&dir)?;
-    Ok(dir)
+pub fn folder(shelf: &Shelf) -> Result<PathBuf> {
+    std::fs::create_dir_all(&shelf.dir)?;
+    Ok(shelf.dir.clone())
 }
 
 #[cfg(test)]
@@ -664,9 +777,11 @@ mod tests {
 
     #[test]
     fn rejects_unsafe_file_names() {
-        assert!(check_file_name("sodium.jar").is_ok());
-        assert!(check_file_name("../escape.jar").is_err());
-        assert!(check_file_name("notes.txt").is_err());
+        assert!(check_file_name(Kind::Mod, "sodium.jar").is_ok());
+        assert!(check_file_name(Kind::Mod, "../escape.jar").is_err());
+        assert!(check_file_name(Kind::Mod, "notes.txt").is_err());
+        assert!(check_file_name(Kind::Shader, "Complementary.zip").is_ok());
+        assert!(check_file_name(Kind::Resourcepack, "..").is_err());
     }
 
     #[test]
@@ -702,23 +817,25 @@ mod tests {
         .unwrap();
         let oldest = versions.as_array().unwrap().last().unwrap();
         let old_file = text(&oldest["files"][0], "filename");
-        let mods = mods_dir(&paths, &instance);
+        let shelf = Shelf::mods(&paths, &instance);
+        let target = Target::for_instance(&instance).unwrap();
+        let mods = shelf.dir().to_path_buf();
         std::fs::create_dir_all(&mods).unwrap();
         let bytes = client.get(text(&oldest["files"][0], "url")).send().await.unwrap().bytes().await.unwrap();
         std::fs::write(mods.join(&old_file), bytes).unwrap();
-        set_enabled(&paths, &instance, &old_file, false).unwrap();
+        set_enabled(&shelf, &old_file, false).unwrap();
 
-        let check = check_updates(&sites, &paths, &instance).await.unwrap();
+        let check = check_updates(&sites, &shelf, &target).await.unwrap();
         let sodium = check.updates.iter().find(|u| u.title == "Sodium").expect("Sodium update found by hash");
         println!("{} → {}", sodium.current_version.as_deref().unwrap_or("?"), sodium.new_version);
-        update(&sites, &paths, &instance, sodium).await.unwrap();
+        update(&sites, &shelf, &target, sodium).await.unwrap();
 
-        let after = installed(&paths, &instance).unwrap();
+        let after = installed(&shelf).unwrap();
         assert_eq!(after.len(), 1);
         assert_eq!(after[0].file, sodium.new_file);
         assert_eq!(after[0].source, Some(Source::Modrinth));
         assert!(!after[0].enabled, "a disabled mod stays disabled");
-        assert!(check_updates(&sites, &paths, &instance).await.unwrap().updates.is_empty());
+        assert!(check_updates(&sites, &shelf, &target).await.unwrap().updates.is_empty());
         std::fs::remove_dir_all(dir).unwrap();
     }
 
@@ -733,19 +850,54 @@ mod tests {
         let client = Client::builder().user_agent("CloverNetwork/Clover-Launcher/test").build().unwrap();
         let sites = Sites { client: &client, curseforge_key: None };
 
-        let page = search(&sites, &Target::for_instance(&instance).unwrap(), Source::Modrinth, "iris", 0).await.unwrap();
+        let shelf = Shelf::mods(&paths, &instance);
+        let target = Target::for_instance(&instance).unwrap();
+        let page = search(&sites, &target, Source::Modrinth, "iris", 0).await.unwrap();
         let iris = page.hits.iter().find(|h| h.title.starts_with("Iris")).expect("Iris in results");
-        let added = install(&sites, &paths, &instance, Source::Modrinth, &iris.id).await.unwrap();
+        let added = install(&sites, &shelf, &target, Source::Modrinth, &iris.id).await.unwrap();
         println!("added: {added:?}");
         assert!(added.iter().any(|t| t.starts_with("Sodium")), "Sodium comes along as a dependency");
 
-        let mods = installed(&paths, &instance).unwrap();
+        let mods = installed(&shelf).unwrap();
         let sodium = mods.iter().find(|m| m.title.starts_with("Sodium")).unwrap();
         assert!(sodium.dependency && sodium.enabled);
-        set_enabled(&paths, &instance, &sodium.file, false).unwrap();
-        assert!(!installed(&paths, &instance).unwrap().iter().find(|m| m.file == sodium.file).unwrap().enabled);
-        remove(&paths, &instance, &sodium.file).unwrap();
-        assert_eq!(installed(&paths, &instance).unwrap().len(), mods.len() - 1);
+        set_enabled(&shelf, &sodium.file, false).unwrap();
+        assert!(!installed(&shelf).unwrap().iter().find(|m| m.file == sodium.file).unwrap().enabled);
+        remove(&shelf, &sodium.file).unwrap();
+        assert_eq!(installed(&shelf).unwrap().len(), mods.len() - 1);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    /// Installs a shader pack and a resource pack into a vanilla instance and a data pack into
+    /// one of its worlds. Run with `cargo test installs_packs -- --ignored`.
+    #[tokio::test]
+    #[ignore]
+    async fn installs_packs() {
+        let dir = std::env::temp_dir().join(format!("clover-content-{}", std::process::id()));
+        let paths = Paths::at(dir.clone());
+        let instance = crate::instances::create(&paths, "Packs", "1.21.4", "vanilla", None).unwrap();
+        let client = Client::builder().user_agent("CloverNetwork/Clover-Launcher/test").build().unwrap();
+        let sites = Sites { client: &client, curseforge_key: None };
+        let world = paths.instance(&instance.id).join("minecraft/saves/World");
+        std::fs::create_dir_all(&world).unwrap();
+        std::fs::write(world.join("level.dat"), b"").unwrap();
+
+        for (kind, query, world) in
+            [(Kind::Shader, "complementary", None), (Kind::Resourcepack, "fresh animations", None), (Kind::Datapack, "terralith", Some("World"))]
+        {
+            let shelf = Shelf::new(&paths, &instance, kind, world).unwrap();
+            let target = Target::new(&instance, kind).unwrap();
+            let page = search(&sites, &target, Source::Modrinth, query, 0).await.unwrap();
+            let hit = &page.hits[0];
+            println!("{kind:?}: {} ({})", hit.title, hit.page_url);
+            let added = install(&sites, &shelf, &target, Source::Modrinth, &hit.id).await.unwrap();
+            assert_eq!(added.len(), 1, "packs bring no dependencies");
+            let items = installed(&shelf).unwrap();
+            assert_eq!(items.len(), 1);
+            assert!(items[0].file.ends_with(".zip"), "{}", items[0].file);
+            assert!(check_updates(&sites, &shelf, &target).await.unwrap().updates.is_empty());
+        }
+        assert!(world.join("datapacks").read_dir().unwrap().count() == 1);
         std::fs::remove_dir_all(dir).unwrap();
     }
 }

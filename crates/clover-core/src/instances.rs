@@ -186,12 +186,17 @@ pub fn delete(paths: &Paths, id: &str) -> Result<()> {
     if !dir.exists() {
         return Err(msg("That instance no longer exists."));
     }
+    move_to_trash(&dir)
+}
+
+/// Moves a file or folder to the system's Trash or Recycle Bin, so it can be put back.
+pub fn move_to_trash(path: &std::path::Path) -> Result<()> {
     #[allow(unused_mut)]
     let mut trash = trash::TrashContext::default();
     // On macOS, the system's own call rather than asking Finder, which needs a permission prompt.
     #[cfg(target_os = "macos")]
     trash::macos::TrashContextExtMacos::set_delete_method(&mut trash, trash::macos::DeleteMethod::NsFileManager);
-    trash.delete(&dir).map_err(|e| msg(format!("Couldn't move the instance to the Trash: {e}")))
+    trash.delete(path).map_err(|e| msg(format!("Couldn't move it to the Trash: {e}")))
 }
 
 #[cfg(test)]

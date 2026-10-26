@@ -1,12 +1,15 @@
-<!-- The instance page's list of mods: turn them on and off, update, remove, add more. -->
+<!--
+  One content folder of an instance (mods, resource packs, shader packs, or a world's data
+  packs): turn files on and off, update, remove, add more.
+-->
 <script lang="ts">
   import { Menu } from "@tauri-apps/api/menu";
-  import { api, errorText, type Instance, type InstalledMod, type ModUpdate } from "$lib/api";
+  import { api, CONTENT, errorText, type Instance, type InstalledMod, type ModUpdate, type Place } from "$lib/api";
   import { launcher } from "$lib/launcher.svelte";
   import BlockIcon from "./BlockIcon.svelte";
   import Icon from "./Icon.svelte";
 
-  let { instance }: { instance: Instance } = $props();
+  let { instance, place, subtitle }: { instance: Instance; place: Place; subtitle?: string } = $props();
 
   let mods = $state<InstalledMod[]>([]);
   let error = $state<string | null>(null);
@@ -14,30 +17,36 @@
   let checking = $state(false);
   let updating = $state<Set<string>>(new Set());
   let status = $state<string | null>(null);
-  const running = $derived(launcher.activity[instance.id] === "running");
+  const names = $derived(CONTENT[place.kind]);
+  const isMods = $derived(place.kind === "mod");
+  const titleId = $derived(`content-title-${place.kind}`);
+  // Mods are loaded once at startup; packs can be swapped while playing.
+  const running = $derived(isMods && launcher.activity[instance.id] === "running");
   const enabledCount = $derived(mods.filter((m) => m.enabled).length);
   const updateFor = (mod: InstalledMod) => updates.find((u) => u.file === mod.file);
 
   // Load the list, then ask Modrinth and CurseForge whether anything is newer.
   $effect(() => {
-    const [id] = [instance.id, launcher.modsRevision];
+    const [id, where] = [instance.id, { kind: place.kind, world: place.world }, launcher.modsRevision];
     let current = true;
     updates = [];
+    mods = [];
+    error = status = null;
     api
-      .listMods(id)
+      .listMods(id, where)
       .then((list) => {
         if (!current) return;
         mods = list;
-        if (list.length) checkUpdates(id, () => current);
+        if (list.length) checkUpdates(id, where, () => current);
       })
       .catch((e) => (error = errorText(e)));
     return () => (current = false);
   });
 
-  async function checkUpdates(id: string, stillCurrent = () => true) {
+  async function checkUpdates(id: string, where: Place, stillCurrent = () => true) {
     checking = true;
     try {
-      const check = await api.checkModUpdates(id);
+      const check = await api.checkModUpdates(id, where);
       if (!stillCurrent()) return;
       updates = check.updates;
       status = check.skipped;
@@ -53,10 +62,10 @@
     error = status = null;
     updating = new Set(list.map((u) => u.file));
     try {
-      const changed = await api.updateMods(instance.id, list);
+      const changed = await api.updateMods(instance.id, place, list);
       const extra = changed.filter((title) => !list.some((u) => u.title === title));
       status =
-        `Updated ${list.length === 1 ? list[0].title : `${list.length} mods`}.` +
+        `Updated ${list.length === 1 ? list[0].title : `${list.length} ${names.plural}`}.` +
         (extra.length ? ` Also added ${extra.join(", ")}, which the new versions need.` : "");
       launcher.modsRevision++;
     } catch (e) {
@@ -69,7 +78,7 @@
   async function toggle(mod: InstalledMod) {
     error = null;
     try {
-      await api.setModEnabled(instance.id, mod.file, !mod.enabled);
+      await api.setModEnabled(instance.id, place, mod.file, !mod.enabled);
       mod.enabled = !mod.enabled;
     } catch (e) {
       error = errorText(e);
@@ -79,7 +88,7 @@
   async function remove(mod: InstalledMod) {
     error = null;
     try {
-      await api.removeMod(instance.id, mod.file);
+      await api.removeMod(instance.id, place, mod.file);
       mods = mods.filter((m) => m.file !== mod.file);
     } catch (e) {
       error = errorText(e);
@@ -106,9 +115,12 @@
     mod.source === "modrinth" ? "Modrinth" : mod.source === "curseforge" ? "CurseForge" : "Added by hand";
 </script>
 
-<section class="mods" aria-labelledby="mods-title">
+<section class="mods" aria-labelledby={titleId}>
   <header>
-    <h2 id="mods-title">Mods</h2>
+    <div class="heading">
+      <h2 id={titleId}>{names.title}</h2>
+      {#if subtitle}<p class="secondary subtitle">{subtitle}</p>{/if}
+    </div>
     {#if mods.length}
       <span class="secondary count">{enabledCount} of {mods.length} on</span>
     {/if}
@@ -118,14 +130,14 @@
         {updating.size > 1 ? "Updating…" : `Update All (${updates.length})`}
       </button>
     {:else if mods.length}
-      <button class="icon-button" aria-label="Check for Updates" title="Check for Updates" disabled={checking} onclick={() => checkUpdates(instance.id)}>
+      <button class="icon-button" aria-label="Check for Updates" title="Check for Updates" disabled={checking} onclick={() => checkUpdates(instance.id, place)}>
         <Icon name="refresh" size={14} />
       </button>
     {/if}
-    <button class="icon-button" aria-label="Show Mods Folder" title="Show Mods Folder" onclick={() => api.showModsFolder(instance.id)}>
+    <button class="icon-button" aria-label="Show {names.title} Folder" title="Show {names.title} Folder" onclick={() => api.showModsFolder(instance.id, place)}>
       <Icon name="folder" />
     </button>
-    <button class="button" onclick={() => (launcher.modsOpen = true)}>Add Mods…</button>
+    <button class="button" onclick={() => (launcher.browse = { ...place })}>Add {names.title}…</button>
   </header>
 
   {#if running && mods.length}
@@ -180,7 +192,7 @@
       {/each}
     </ul>
   {:else}
-    <p class="empty secondary">No mods yet. Add some from Modrinth or CurseForge.</p>
+    <p class="empty secondary">No {names.plural} yet. Add some from Modrinth or CurseForge, or drop files in the folder.</p>
   {/if}
 </section>
 
@@ -201,6 +213,11 @@
     margin: 0;
     font-size: 15px;
     font-weight: 600;
+  }
+
+  .subtitle {
+    margin: 0;
+    font-size: 11px;
   }
 
   .count {

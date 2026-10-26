@@ -8,6 +8,7 @@
   import CloverLogo from "$lib/components/CloverLogo.svelte";
   import GameLog from "$lib/components/GameLog.svelte";
   import Icon from "$lib/components/Icon.svelte";
+  import DataPacksSheet from "$lib/components/DataPacksSheet.svelte";
   import EditInstanceSheet from "$lib/components/EditInstanceSheet.svelte";
   import ImportModpackSheet from "$lib/components/ImportModpackSheet.svelte";
   import InstanceDetail from "$lib/components/InstanceDetail.svelte";
@@ -36,6 +37,7 @@
     create_shortcut: () => launcher.createShortcut(),
     edit_instance: () => launcher.edit(),
     duplicate_instance: () => launcher.duplicate(),
+    export_instance: () => launcher.exportPack(),
     add_account: () => (launcher.accountOpen = true),
     skins: () => launcher.account && (launcher.skinsOpen = true),
     sign_out: () => launcher.signOut(),
@@ -251,6 +253,7 @@
 <ModBrowserSheet />
 <ImportModpackSheet />
 <EditInstanceSheet />
+<DataPacksSheet />
 
 <style>
   .window {

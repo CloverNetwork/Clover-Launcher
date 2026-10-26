@@ -1,7 +1,10 @@
-<!-- Search Modrinth or CurseForge for mods that fit the instance's game version and loader. -->
+<!--
+  Search Modrinth or CurseForge for mods that fit the instance's game version and loader, or
+  for resource, shader and data packs for its game version.
+-->
 <script lang="ts">
   import { openUrl } from "@tauri-apps/plugin-opener";
-  import { api, CURSEFORGE_KEY_FORM, errorText, type ModHit, type ModSource } from "$lib/api";
+  import { api, CONTENT, CURSEFORGE_KEY_FORM, errorText, type ModHit, type ModSource, type Place } from "$lib/api";
   import { launcher } from "$lib/launcher.svelte";
   import Icon from "./Icon.svelte";
 
@@ -17,10 +20,12 @@
   let installs = $state<Record<string, "installing" | "installed">>({});
 
   const instance = $derived(launcher.selected);
+  const place = $derived(launcher.browse);
+  const names = $derived(CONTENT[place?.kind ?? "mod"]);
   const needsKey = $derived(source === "curseforge" && error?.includes("API key"));
 
   $effect(() => {
-    if (launcher.modsOpen) {
+    if (launcher.browse) {
       dialog?.showModal();
       installs = {};
       markInstalled();
@@ -31,17 +36,17 @@
 
   // Search as the person types, a moment after they pause.
   $effect(() => {
-    if (!launcher.modsOpen || !instance) return;
-    const [id, from, text] = [instance.id, source, query];
-    const timer = setTimeout(() => run(id, from, text, 0), text ? 300 : 0);
+    if (!place || !instance) return;
+    const [id, where, from, text] = [instance.id, place, source, query];
+    const timer = setTimeout(() => run(id, where, from, text, 0), text ? 300 : 0);
     return () => clearTimeout(timer);
   });
 
-  async function run(id: string, from: ModSource, text: string, offset: number) {
+  async function run(id: string, where: Place, from: ModSource, text: string, offset: number) {
     loading = true;
     error = null;
     try {
-      const page = await api.searchMods(id, from, text, offset);
+      const page = await api.searchMods(id, where, from, text, offset);
       if (from !== source || text !== query) return; // a newer search replaced this one
       hits = offset ? [...hits, ...page.hits] : page.hits;
       total = page.total;
@@ -54,20 +59,20 @@
   }
 
   async function markInstalled() {
-    if (!instance) return;
-    const mods = await api.listMods(instance.id);
+    if (!instance || !place) return;
+    const mods = await api.listMods(instance.id, place);
     for (const mod of mods) {
       if (mod.source && mod.projectId) installs[`${mod.source}:${mod.projectId}`] = "installed";
     }
   }
 
   async function install(hit: ModHit) {
-    if (!instance) return;
+    if (!instance || !place) return;
     const key = `${hit.source}:${hit.id}`;
     installs[key] = "installing";
     error = notice = null;
     try {
-      const added = await api.installMod(instance.id, hit.source, hit.id);
+      const added = await api.installMod(instance.id, place, hit.source, hit.id);
       installs[key] = "installed";
       const extra = added.slice(1);
       notice = extra.length ? `Also added ${extra.join(", ")}, which ${hit.title} needs.` : null;
@@ -82,12 +87,14 @@
   const compact = new Intl.NumberFormat(undefined, { notation: "compact" });
 </script>
 
-<dialog class="sheet browser" bind:this={dialog} aria-labelledby="mods-browser-title" onclose={() => (launcher.modsOpen = false)}>
+<dialog class="sheet browser" bind:this={dialog} aria-labelledby="mods-browser-title" onclose={() => (launcher.browse = null)}>
   <header>
-    <h2 id="mods-browser-title">Add Mods</h2>
+    <h2 id="mods-browser-title">Add {names.title}</h2>
     {#if instance}
       <p class="secondary">
-        {instance.name} · Minecraft {instance.version} · {launcher.loaderLabel(instance)}
+        {instance.name} · Minecraft {instance.version}{place?.kind === "mod" ? ` · ${launcher.loaderLabel(instance)}` : ""}{place?.world
+          ? ` · ${place.world}`
+          : ""}
       </p>
     {/if}
   </header>
@@ -99,7 +106,7 @@
     </div>
     <label class="search">
       <Icon name="search" size={14} />
-      <span class="visually-hidden">Search mods</span>
+      <span class="visually-hidden">Search {names.plural}</span>
       <!-- svelte-ignore a11y_autofocus -->
       <input
         type="search"
@@ -154,14 +161,16 @@
         {/each}
       </ul>
       {#if hits.length < total}
-        <button class="button more" disabled={loading} onclick={() => instance && run(instance.id, source, query, hits.length)}>
+        <button class="button more" disabled={loading} onclick={() => instance && place && run(instance.id, place, source, query, hits.length)}>
           {loading ? "Loading…" : "Show More"}
         </button>
       {/if}
     {:else if loading}
       <p class="message secondary">Searching…</p>
     {:else if !error}
-      <p class="message secondary">No mods match{query ? ` “${query}”` : ""} for this version and loader.</p>
+      <p class="message secondary">
+        No {names.plural} match{query ? ` “${query}”` : ""} for this {place?.kind === "mod" ? "version and loader" : "version"}.
+      </p>
     {/if}
   </div>
 
@@ -169,7 +178,7 @@
     <p class="status" role="status" aria-live="polite">
       {#if error && !needsKey}<span class="error">{error}</span>{:else if notice}<span class="secondary">{notice}</span>{/if}
     </p>
-    <button class="button default" onclick={() => (launcher.modsOpen = false)}>Done</button>
+    <button class="button default" onclick={() => (launcher.browse = null)}>Done</button>
   </div>
 </dialog>
 

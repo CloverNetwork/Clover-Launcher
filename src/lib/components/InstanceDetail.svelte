@@ -3,10 +3,35 @@
   import { launcher } from "$lib/launcher.svelte";
   import BlockIcon from "./BlockIcon.svelte";
   import Icon from "./Icon.svelte";
-  import ModsSection from "./ModsSection.svelte";
+  import ContentSection from "./ContentSection.svelte";
+  import ScreenshotsSection from "./ScreenshotsSection.svelte";
+  import WorldsSection from "./WorldsSection.svelte";
   import { SHOW_FOLDER } from "$lib/platform";
 
   let { instance }: { instance: Instance } = $props();
+
+  type Tab = "mods" | "resourcepacks" | "shaders" | "worlds" | "screenshots";
+  const modded = $derived(instance.loader !== "vanilla" && instance.loader !== "custom");
+  // Shader packs need Iris or OptiFine, which are mods.
+  const tabs = $derived<{ id: Tab; label: string }[]>([
+    ...(modded ? [{ id: "mods" as const, label: "Mods" }] : []),
+    { id: "resourcepacks", label: "Resource Packs" },
+    ...(modded ? [{ id: "shaders" as const, label: "Shaders" }] : []),
+    { id: "worlds", label: "Worlds" },
+    { id: "screenshots", label: "Screenshots" },
+  ]);
+  let chosen = $state<Tab>("mods");
+  const tab = $derived(tabs.some((t) => t.id === chosen) ? chosen : tabs[0].id);
+
+  /** Arrow keys move between tabs, as in a native segmented control. */
+  function onTabKey(e: KeyboardEvent) {
+    const step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+    if (!step) return;
+    e.preventDefault();
+    const index = tabs.findIndex((t) => t.id === tab);
+    chosen = tabs[(index + step + tabs.length) % tabs.length].id;
+    (e.currentTarget as HTMLElement).querySelector<HTMLElement>(`[data-tab="${chosen}"]`)?.focus();
+  }
 
   const activity = $derived(launcher.activity[instance.id]);
   const progress = $derived(launcher.progress[instance.id]);
@@ -71,9 +96,35 @@
     </div>
   </dl>
 
-  {#if instance.loader !== "vanilla" && instance.loader !== "custom"}
-    <ModsSection {instance} />
-  {/if}
+  <div class="tabs" role="tablist" aria-label="Instance contents" tabindex="-1" onkeydown={onTabKey}>
+    {#each tabs as t (t.id)}
+      <button
+        role="tab"
+        id="tab-{t.id}"
+        data-tab={t.id}
+        aria-selected={tab === t.id}
+        aria-controls="tab-panel"
+        tabindex={tab === t.id ? 0 : -1}
+        onclick={() => (chosen = t.id)}
+      >
+        {t.label}
+      </button>
+    {/each}
+  </div>
+
+  <div id="tab-panel" role="tabpanel" aria-labelledby="tab-{tab}">
+    {#if tab === "mods"}
+      <ContentSection {instance} place={{ kind: "mod" }} />
+    {:else if tab === "resourcepacks"}
+      <ContentSection {instance} place={{ kind: "resourcepack" }} />
+    {:else if tab === "shaders"}
+      <ContentSection {instance} place={{ kind: "shader" }} />
+    {:else if tab === "worlds"}
+      <WorldsSection {instance} />
+    {:else}
+      <ScreenshotsSection {instance} />
+    {/if}
+  </div>
 </article>
 
 <style>
@@ -205,6 +256,40 @@
   dd {
     margin: 0;
     color: var(--text-secondary);
+  }
+
+  .tabs {
+    display: flex;
+    width: fit-content;
+    max-width: 640px;
+    margin-top: 28px;
+    padding: 2px;
+    border-radius: var(--radius-control);
+    background: var(--bg-control);
+    overflow-x: auto;
+  }
+
+  .tabs:focus {
+    outline: none;
+  }
+
+  .tabs button {
+    flex: none;
+    padding: 3px 12px;
+    border: none;
+    border-radius: 5px;
+    background: transparent;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .tabs button[aria-selected="true"] {
+    background: var(--bg-segment-selected);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+  }
+
+  #tab-panel > :global(section) {
+    margin-top: 16px;
   }
 
   .link {

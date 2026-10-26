@@ -1,7 +1,7 @@
 import { Menu } from "@tauri-apps/api/menu";
-import { ask, message } from "@tauri-apps/plugin-dialog";
+import { ask, message, save } from "@tauri-apps/plugin-dialog";
 import { DELETE_INSTANCE, SHORTCUT_LABEL, SHOW_FOLDER, TRASH } from "./platform";
-import { api, errorText, events, type Accounts, type Instance, type LoaderSource, type Profile } from "./api";
+import { api, errorText, events, type Accounts, type Instance, type LoaderSource, type Place, type Profile, type World } from "./api";
 
 const MAX_LOG_LINES = 2000;
 
@@ -57,7 +57,10 @@ class Launcher {
   newInstanceOpen = $state(false);
   accountOpen = $state(false);
   skinsOpen = $state(false);
-  modsOpen = $state(false);
+  /** The folder the Add Mods (or packs) sheet installs into, while it's open. */
+  browse = $state<Place | null>(null);
+  /** The world whose data packs sheet is open. */
+  dataPacksWorld = $state<World | null>(null);
   importOpen = $state(false);
   editOpen = $state(false);
   /** Sidebar and grid filter. */
@@ -229,6 +232,7 @@ class Launcher {
         { item: "Separator" },
         { id: "edit", text: "Edit Instance…", enabled: !running, action: () => this.edit(id) },
         { id: "duplicate", text: "Duplicate", action: () => this.duplicate(id) },
+        { id: "export", text: "Export as Modpack…", enabled: !this.activity[id], action: () => this.exportPack(id) },
         { item: "Separator" },
         { id: "shortcut", text: SHORTCUT_LABEL, action: () => this.createShortcut(id) },
         { id: "command", text: "Copy Launch Command", action: () => this.copyLaunchCommand(id) },
@@ -312,6 +316,30 @@ class Launcher {
 
   async showFolder(id = this.selectedId) {
     if (id) await api.showInstanceFolder(id);
+  }
+
+  /** Saves the instance as a Modrinth pack wherever the person picks. */
+  async exportPack(id = this.selectedId) {
+    const instance = this.instances.find((i) => i.id === id);
+    if (!instance) return;
+    const path = await save({
+      title: "Export as Modpack",
+      defaultPath: `${instance.name.replace(/[\\/:*?"<>|]/g, "-")}.mrpack`,
+      filters: [{ name: "Modrinth Modpack", extensions: ["mrpack"] }],
+    });
+    if (!path) return;
+    this.notice = { instanceId: instance.id, message: "Exporting…" };
+    try {
+      const { linked, included } = await api.exportModpack(instance.id, path);
+      const count = (n: number) => `${n} ${n === 1 ? "file" : "files"}`;
+      this.notice = {
+        instanceId: instance.id,
+        message: `Exported. ${count(linked)} download from Modrinth; ${count(included)} packed in.`,
+      };
+    } catch (e) {
+      this.notice = null;
+      this.error = { instanceId: instance.id, message: `Couldn't export: ${errorText(e)}` };
+    }
   }
 
   /** Re-checks every file, replacing damaged ones. */

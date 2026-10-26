@@ -57,6 +57,27 @@ export type Settings = {
 /** How windows are framed: on Hyprland they have no title bar. */
 export type WindowChrome = { hyprland: boolean; buttons: boolean };
 export type ModSource = "modrinth" | "curseforge";
+export type ContentKind = "mod" | "resourcepack" | "shader" | "datapack";
+/** Which folder content commands act on. Data packs also name their world's folder. */
+export type Place = { kind: ContentKind; world?: string };
+export const MODS: Place = { kind: "mod" };
+/** Each kind's names: the title for headings and buttons, and the plural in sentences. */
+export const CONTENT: Record<ContentKind, { title: string; plural: string }> = {
+  mod: { title: "Mods", plural: "mods" },
+  resourcepack: { title: "Resource Packs", plural: "resource packs" },
+  shader: { title: "Shader Packs", plural: "shader packs" },
+  datapack: { title: "Data Packs", plural: "data packs" },
+};
+export type World = {
+  folder: string;
+  name: string;
+  lastPlayed: number | null;
+  mode: string;
+  version: string | null;
+  icon: string | null;
+};
+export type Screenshot = { file: string; path: string; taken: number };
+export type Exported = { linked: number; included: number };
 export type ModHit = {
   source: ModSource;
   id: string;
@@ -138,23 +159,34 @@ export const api = {
   verifyInstance: (id: string) => invoke<[Instance, number]>("verify_instance", { id }),
   launchInstance: (id: string) => invoke<Instance>("launch_instance", { id }),
   stopInstance: (id: string) => invoke<void>("stop_instance", { id }),
-  searchMods: (id: string, source: ModSource, query: string, offset: number) =>
-    invoke<ModPage>("search_mods", { id, source, query, offset }),
-  listMods: (id: string) => invoke<InstalledMod[]>("list_mods", { id }),
+  searchMods: (id: string, place: Place, source: ModSource, query: string, offset: number) =>
+    invoke<ModPage>("search_mods", { id, place, source, query, offset }),
+  listMods: (id: string, place = MODS) => invoke<InstalledMod[]>("list_mods", { id, place }),
   /** Rejects with CurseForge's reason when the key doesn't work. */
   checkCurseforgeKey: (key: string) => invoke<void>("check_curseforge_key", { key }),
   /** Resolves to the titles of everything added, dependencies included. */
-  installMod: (id: string, source: ModSource, project: string) => invoke<string[]>("install_mod", { id, source, project }),
+  installMod: (id: string, place: Place, source: ModSource, project: string) =>
+    invoke<string[]>("install_mod", { id, place, source, project }),
   searchModpacks: (source: ModSource, query: string, offset: number) =>
     invoke<ModPage>("search_modpacks", { source, query, offset }),
   installModpack: (source: ModSource, project: string) => invoke<ImportedPack>("install_modpack", { source, project }),
   importModpackFile: (path: string) => invoke<ImportedPack>("import_modpack_file", { path }),
-  checkModUpdates: (id: string) => invoke<UpdateCheck>("check_mod_updates", { id }),
+  checkModUpdates: (id: string, place = MODS) => invoke<UpdateCheck>("check_mod_updates", { id, place }),
   /** Resolves to the titles of everything updated or newly required. */
-  updateMods: (id: string, updates: ModUpdate[]) => invoke<string[]>("update_mods", { id, updates }),
-  setModEnabled: (id: string, file: string, enabled: boolean) => invoke<void>("set_mod_enabled", { id, file, enabled }),
-  removeMod: (id: string, file: string) => invoke<void>("remove_mod", { id, file }),
-  showModsFolder: (id: string) => invoke<void>("show_mods_folder", { id }),
+  updateMods: (id: string, place: Place, updates: ModUpdate[]) => invoke<string[]>("update_mods", { id, place, updates }),
+  setModEnabled: (id: string, place: Place, file: string, enabled: boolean) =>
+    invoke<void>("set_mod_enabled", { id, place, file, enabled }),
+  removeMod: (id: string, place: Place, file: string) => invoke<void>("remove_mod", { id, place, file }),
+  showModsFolder: (id: string, place = MODS) => invoke<void>("show_mods_folder", { id, place }),
+  listWorlds: (id: string) => invoke<World[]>("list_worlds", { id }),
+  /** Zips the world into the instance's backups folder and reveals it. */
+  backupWorld: (id: string, folder: string, label: string) => invoke<void>("backup_world", { id, folder, label }),
+  trashWorld: (id: string, folder: string) => invoke<void>("trash_world", { id, folder }),
+  showWorld: (id: string, folder: string) => invoke<void>("show_world", { id, folder }),
+  listScreenshots: (id: string) => invoke<Screenshot[]>("list_screenshots", { id }),
+  openScreenshot: (id: string, file: string, reveal = false) => invoke<void>("open_screenshot", { id, file, reveal }),
+  trashScreenshot: (id: string, file: string) => invoke<void>("trash_screenshot", { id, file }),
+  exportModpack: (id: string, path: string) => invoke<Exported>("export_modpack", { id, path }),
   /** The recent output of an instance's game and installers. */
   gameLog: (id: string) => invoke<string[]>("game_log", { id }),
   openLogWindow: (id: string) => invoke<void>("open_log_window", { id }),

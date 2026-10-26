@@ -16,7 +16,7 @@ use crate::download::{self, Task, Verify};
 use crate::error::{Result, msg};
 use crate::install::Reporter;
 use crate::instances::{self, Instance};
-use crate::mods::{self, CURSEFORGE, CURSEFORGE_MINECRAFT, InstalledMod, MODRINTH, PAGE_SIZE, SearchHit, SearchPage, Sites, Source, json, text};
+use crate::mods::{self, CURSEFORGE, CURSEFORGE_MINECRAFT, InstalledMod, Kind, MODRINTH, PAGE_SIZE, SearchHit, SearchPage, Shelf, Sites, Source, json, text};
 use crate::paths::Paths;
 
 const CURSEFORGE_MODPACKS_CLASS: u32 = 4471;
@@ -305,15 +305,16 @@ async fn fill_curseforge(
             projects["data"].as_array().into_iter().flatten().filter_map(|p| Some((p["id"].as_u64()?, p))).collect();
 
         let mut tasks = Vec::new();
-        let mut records = Vec::new();
+        let mut records: HashMap<Kind, Vec<InstalledMod>> = HashMap::new();
         for file in files["data"].as_array().into_iter().flatten() {
             let project = file["modId"].as_u64().and_then(|id| projects.get(&id).copied());
-            // CurseForge classes: 12 resource packs, 6552 shader packs; everything else is a mod.
-            let folder = match project.and_then(|p| p["classId"].as_u64()) {
-                Some(12) => "resourcepacks",
-                Some(6552) => "shaderpacks",
-                _ => "mods",
+            // Data packs in a pack are usually loaded by a mod from a folder of its own,
+            // so anything that isn't a resource or shader pack goes in with the mods.
+            let kind = match Kind::from_curseforge_class(project.and_then(|p| p["classId"].as_u64())) {
+                Kind::Datapack => Kind::Mod,
+                kind => kind,
             };
+            let folder = kind.folder();
             let name = text(file, "fileName");
             let path = inside(&game_dir, &format!("{folder}/{name}"))?;
             let Some(url) = file["downloadUrl"].as_str() else {
@@ -323,23 +324,23 @@ async fn fill_curseforge(
             };
             let sha1 = file["hashes"].as_array().into_iter().flatten().find(|h| h["algo"] == 1).map(|h| text(h, "value"));
             tasks.push(Task { url: url.to_string(), path, sha1 });
-            if folder == "mods" {
-                records.push(InstalledMod {
-                    file: name,
-                    title: project.map(|p| text(p, "name")).unwrap_or_else(|| text(file, "displayName")),
-                    source: Some(Source::Curseforge),
-                    project_id: file["modId"].as_u64().map(|id| id.to_string()),
-                    version: Some(text(file, "displayName")),
-                    icon_url: project.and_then(|p| p["logo"]["thumbnailUrl"].as_str()).map(String::from),
-                    dependency: false,
-                    enabled: true,
-                });
-            }
+            records.entry(kind).or_default().push(InstalledMod {
+                file: name,
+                title: project.map(|p| text(p, "name")).unwrap_or_else(|| text(file, "displayName")),
+                source: Some(Source::Curseforge),
+                project_id: file["modId"].as_u64().map(|id| id.to_string()),
+                version: Some(text(file, "displayName")),
+                icon_url: project.and_then(|p| p["logo"]["thumbnailUrl"].as_str()).map(String::from),
+                dependency: false,
+                enabled: true,
+            });
         }
         reporter.stage(&format!("Downloading {} files…", tasks.len()));
         download::run(sites.client, tasks, Verify::Existing, |done, total| reporter.files(done, total)).await?;
-        // Remember where each mod came from, so updates work for the pack's mods.
-        mods::save_records(paths, instance, &records)?;
+        // Remember where each file came from, so updates work for the pack's files.
+        for (kind, records) in records {
+            mods::save_records(&Shelf::new(paths, instance, kind, None)?, &records)?;
+        }
     }
 
     reporter.stage("Copying the modpack's settings…");
@@ -394,7 +395,7 @@ mod tests {
         let imported = import(&sites, &paths, &file, &mut Quiet).await.unwrap();
         println!("{} → {} {:?}", imported.instance.name, imported.instance.loader, imported.instance.loader_version);
         assert_eq!(imported.instance.loader, "fabric");
-        let mods = mods::installed(&paths, &imported.instance).unwrap();
+        let mods = mods::installed(&Shelf::mods(&paths, &imported.instance)).unwrap();
         assert!(mods.len() > 10, "only {} mods", mods.len());
         assert!(paths.instance(&imported.instance.id).join("minecraft/config").exists(), "overrides copied");
         std::fs::remove_dir_all(dir).unwrap();

@@ -18,6 +18,8 @@ png = "0.18"
 trash = "5"
 base64 = "0.22"
 bytes = "1"
+fastnbt = "2"
+flate2 = "1"
 zip = { version = "2", default-features = false, features = ["deflate"] }
 thiserror = "2"
 uuid = { version = "1", features = ["v4"] }
