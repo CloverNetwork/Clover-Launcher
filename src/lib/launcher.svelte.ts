@@ -1,6 +1,7 @@
 import { Menu } from "@tauri-apps/api/menu";
 import { ask, message, save } from "@tauri-apps/plugin-dialog";
 import { DELETE_INSTANCE, SHORTCUT_LABEL, SHOW_FOLDER, TRASH } from "./platform";
+import { notifyIfAway } from "./notify";
 import { api, errorText, events, type Accounts, type Instance, type LoaderSource, type CrashFinding, type Place, type QuickPlay, type Profile, type World } from "./api";
 
 const MAX_LOG_LINES = 2000;
@@ -48,6 +49,8 @@ class Launcher {
   error = $state<{ instanceId: string; message: string } | null>(null);
   /** A short confirmation shown in the status line, such as the result of verifying files. */
   notice = $state<{ instanceId: string; message: string } | null>(null);
+  /** Instances whose current launch had files to download; not shown, so not reactive. */
+  private downloaded = new Set<string>();
   /** Likely causes of the last crash, with what happened to each fix by its index. */
   crash = $state<{ instanceId: string; findings: CrashFinding[]; done: Record<number, string> } | null>(null);
 
@@ -122,6 +125,7 @@ class Launcher {
       events.installProgress(({ instanceId, stage, done, total }) => {
         // A new stage resets the file count; file updates keep the current stage.
         this.progress[instanceId] = stage ? { stage, done: 0, total: 0 } : { stage: null, done, total };
+        if (total > 0) this.downloaded.add(instanceId);
       }),
       events.gameLog(({ instanceId, line }) => {
         const lines = (this.logs[instanceId] ??= []);
@@ -317,8 +321,12 @@ class Launcher {
     this.activity[id] = "launching";
     this.logs[id] = [];
     try {
-      this.replace(await api.launchInstance(id, quickPlay));
+      this.downloaded.delete(id);
+      const instance = await api.launchInstance(id, quickPlay);
+      this.replace(instance);
       this.activity[id] = "running";
+      // A first launch can download for minutes; say when the game is finally starting.
+      if (this.downloaded.delete(id)) notifyIfAway("Minecraft Is Starting", instance.name);
     } catch (e) {
       delete this.activity[id];
       this.error = { instanceId: id, message: errorText(e) };

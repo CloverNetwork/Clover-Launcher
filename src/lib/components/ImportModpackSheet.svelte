@@ -3,6 +3,7 @@
   this computer. Each import becomes a new instance.
 -->
 <script lang="ts">
+  import { notifyIfAway } from "$lib/notify";
   import { onMount } from "svelte";
   import { open } from "@tauri-apps/plugin-dialog";
   import { openUrl } from "@tauri-apps/plugin-opener";
@@ -84,6 +85,7 @@
     error = null;
     try {
       const pack = await job();
+      notifyIfAway("Modpack Imported", `${pack.instance.name} is ready to play.`);
       await launcher.showImported(pack.instance);
       if (pack.blocked.length) blocked = { pack, files: pack.blocked };
       else launcher.importOpen = false;

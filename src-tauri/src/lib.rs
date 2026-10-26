@@ -447,6 +447,15 @@ fn discord_built_in() -> bool {
     option_env!("DISCORD_APP_ID").is_some()
 }
 
+/// Installs the performance mods that exist for the instance.
+#[tauri::command]
+async fn install_performance_mods(state: State<'_, AppState>, id: String) -> Result<mods::PackResult> {
+    let instance = instances::get(&state.paths, &id)?;
+    let settings = settings::load(&state.paths);
+    let (shelf, target) = (mods::Shelf::mods(&state.paths, &instance), mods::Target::for_instance(&instance)?);
+    mods::install_performance(&sites(&state, &settings), &shelf, &target).await
+}
+
 #[tauri::command]
 fn list_servers(state: State<'_, AppState>, id: String) -> Result<Vec<servers::Server>> {
     servers::list(&state.paths, &instances::get(&state.paths, &id)?)
@@ -724,6 +733,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(Running::default())
         .manage(presence::Discord::default())
@@ -794,6 +804,7 @@ pub fn run() {
             export_modpack,
             analyze_crash,
             list_servers,
+            install_performance_mods,
             discord_built_in,
             get_instance,
             save_server,

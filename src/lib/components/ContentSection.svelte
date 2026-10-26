@@ -75,6 +75,25 @@
     }
   }
 
+  let addingPack = $state(false);
+
+  async function addPerformanceMods() {
+    error = status = null;
+    addingPack = true;
+    try {
+      const { added, unavailable } = await api.installPerformanceMods(instance.id);
+      status = added.length
+        ? `Added ${added.join(", ")}.`
+        : "The performance mods that work with this version are already installed.";
+      if (unavailable) status += ` ${unavailable} more ${unavailable === 1 ? "isn't" : "aren't"} available for this version yet.`;
+      launcher.modsRevision++;
+    } catch (e) {
+      error = errorText(e);
+    } finally {
+      addingPack = false;
+    }
+  }
+
   async function toggle(mod: InstalledMod) {
     error = null;
     try {
@@ -137,6 +156,16 @@
     <button class="icon-button" aria-label="Show {names.title} Folder" title="Show {names.title} Folder" onclick={() => api.showModsFolder(instance.id, place)}>
       <Icon name="folder" />
     </button>
+    {#if isMods}
+      <button
+        class="button"
+        disabled={addingPack || running}
+        title="Sodium, Lithium, FerriteCore and other mods that make the game faster without changing it"
+        onclick={addPerformanceMods}
+      >
+        {addingPack ? "Adding…" : "Add Performance Mods"}
+      </button>
+    {/if}
     <button class="button" onclick={() => (launcher.browse = { ...place })}>Add {names.title}…</button>
   </header>
 

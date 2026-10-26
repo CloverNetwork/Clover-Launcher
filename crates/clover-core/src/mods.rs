@@ -484,6 +484,54 @@ pub async fn install(sites: &Sites<'_>, shelf: &Shelf, target: &Target, source: 
     install_queue(sites, shelf, target, source, vec![(project.to_string(), 0)]).await
 }
 
+/// Well-known mods that make the game faster without changing how it plays, from Modrinth.
+/// Embeddium stands in for Sodium where Sodium has no build (older Forge).
+const PERFORMANCE: [&str; 7] = ["sodium", "embeddium", "lithium", "ferrite-core", "immediatelyfast", "entityculling", "modernfix"];
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PackResult {
+    /// Titles of what was installed, dependencies included.
+    pub added: Vec<String>,
+    /// How many of the pack's mods have no version for this game and loader.
+    pub unavailable: usize,
+}
+
+/// Installs the performance mods that exist for the instance's version and loader,
+/// skipping any already installed.
+pub async fn install_performance(sites: &Sites<'_>, shelf: &Shelf, target: &Target) -> Result<PackResult> {
+    let present: HashSet<String> = load_records(shelf).into_iter().filter_map(|r| r.project_id).collect();
+    let mut result = PackResult { added: vec![], unavailable: 0 };
+    let mut have_renderer = false;
+    for slug in PERFORMANCE {
+        if slug == "embeddium" && have_renderer {
+            continue;
+        }
+        // Records hold project IDs, so compare against the project's ID too.
+        let info = json(sites.client.get(format!("{MODRINTH}/project/{slug}"))).await?;
+        if present.contains(&text(&info, "id")) {
+            have_renderer |= slug == "sodium";
+            continue;
+        }
+        match install(sites, shelf, target, Source::Modrinth, slug).await {
+            Ok(added) => {
+                have_renderer |= slug == "sodium" || slug == "embeddium";
+                result.added.extend(added);
+            }
+            Err(e) if e.to_string().contains("has no version") => {
+                if slug != "embeddium" && slug != "sodium" {
+                    result.unavailable += 1;
+                }
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    if !have_renderer {
+        result.unavailable += 1;
+    }
+    Ok(result)
+}
+
 /// Installs projects and what they require. Depth 0 is a picked mod (updated if present);
 /// deeper entries are dependencies, left alone when already installed.
 async fn install_queue(
@@ -899,6 +947,26 @@ mod tests {
             assert!(check_updates(&sites, &shelf, &target).await.unwrap().updates.is_empty());
         }
         assert!(world.join("datapacks").read_dir().unwrap().count() == 1);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    /// Installs the performance pack into a Fabric instance, then again, which adds nothing.
+    /// Run with `cargo test installs_the_performance_pack -- --ignored --nocapture`.
+    #[tokio::test]
+    #[ignore]
+    async fn installs_the_performance_pack() {
+        let dir = std::env::temp_dir().join(format!("clover-perf-{}", std::process::id()));
+        let paths = Paths::at(dir.clone());
+        let instance = instance("fabric");
+        let client = Client::builder().user_agent("CloverNetwork/Clover-Launcher/test").build().unwrap();
+        let sites = Sites { client: &client, curseforge_key: None };
+        let (shelf, target) = (Shelf::mods(&paths, &instance), Target::for_instance(&instance).unwrap());
+        let first = install_performance(&sites, &shelf, &target).await.unwrap();
+        println!("{first:?}");
+        assert!(first.added.iter().any(|t| t == "Sodium") && first.added.len() >= 5);
+        assert!(!first.added.iter().any(|t| t.contains("Embeddium")));
+        let again = install_performance(&sites, &shelf, &target).await.unwrap();
+        assert!(again.added.is_empty(), "{again:?}");
         std::fs::remove_dir_all(dir).unwrap();
     }
 }

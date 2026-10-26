@@ -2,7 +2,11 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Capability for the main, settings and game log windows",
-  "windows": ["main", "settings", "log-*"],
+  "windows": [
+    "main",
+    "settings",
+    "log-*"
+  ],
   "permissions": [
     "core:default",
     "core:window:allow-start-dragging",
@@ -13,6 +17,7 @@
     "opener:default",
     "dialog:default",
     "updater:default",
-    "process:allow-restart"
+    "process:allow-restart",
+    "notification:default"
   ]
 }

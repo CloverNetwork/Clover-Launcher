@@ -2,6 +2,7 @@
 <script lang="ts">
   import { Menu } from "@tauri-apps/api/menu";
   import { api, errorText, type Instance, type World } from "$lib/api";
+  import { notifyIfAway } from "$lib/notify";
   import { launcher } from "$lib/launcher.svelte";
   import { DELETE_INSTANCE, SHOW_FOLDER } from "$lib/platform";
   import BlockIcon from "./BlockIcon.svelte";
@@ -50,6 +51,7 @@
     try {
       await api.backupWorld(instance.id, world.folder, fileStamp());
       status = `Backed up ${world.name}.`;
+      notifyIfAway("World Backed Up", world.name);
     } catch (e) {
       error = errorText(e);
     } finally {

@@ -28,3 +28,4 @@ serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
 reqwest.workspace = true
+tauri-plugin-notification = "2"

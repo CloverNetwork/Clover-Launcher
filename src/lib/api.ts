@@ -206,6 +206,8 @@ export const api = {
   trashScreenshot: (id: string, file: string) => invoke<void>("trash_screenshot", { id, file }),
   exportModpack: (id: string, path: string) => invoke<Exported>("export_modpack", { id, path }),
   getInstance: (id: string) => invoke<Instance>("get_instance", { id }),
+  /** Resolves to what was added and how many of the pack's mods don't exist for this instance. */
+  installPerformanceMods: (id: string) => invoke<{ added: string[]; unavailable: number }>("install_performance_mods", { id }),
   listServers: (id: string) => invoke<Server[]>("list_servers", { id }),
   /** Adds a server, or changes the one at `index`. Resolves to the new list. */
   saveServer: (id: string, index: number | null, name: string, address: string) =>
