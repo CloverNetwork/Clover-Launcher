@@ -1,6 +1,6 @@
 import { Menu } from "@tauri-apps/api/menu";
 import { ask, message, save } from "@tauri-apps/plugin-dialog";
-import { DELETE_INSTANCE, SHORTCUT_LABEL, SHOW_FOLDER, TRASH } from "./platform";
+import { DELETE_INSTANCE, REMOVE_SHORTCUT_LABEL, SHORTCUT_LABEL, SHOW_FOLDER, TRASH } from "./platform";
 import { locale, t } from "./i18n";
 import { notifyIfAway } from "./notify";
 import { api, errorText, events, type Accounts, type Instance, type LoaderSource, type CrashFinding, type Place, type QuickPlay, type Profile, type World } from "./api";
@@ -199,9 +199,15 @@ class Launcher {
     await this.play(id);
   }
 
-  async createShortcut(id = this.selectedId) {
+  /** Adds the instance to the OS's launcher, or removes it if it's already there. */
+  async toggleShortcut(id = this.selectedId) {
     if (!id) return;
     try {
+      if (await api.hasShortcut(id)) {
+        await api.removeShortcut(id);
+        this.notice = { instanceId: id, message: t("Removed the shortcut.") };
+        return;
+      }
       const place = await api.createShortcut(id);
       this.notice = { instanceId: id, message: t("Added a shortcut: {place}", { place }) };
     } catch (e) {
@@ -231,6 +237,7 @@ class Launcher {
     e.preventDefault();
     this.selectedId = id;
     const running = this.activity[id] === "running";
+    const hasShortcut = await api.hasShortcut(id).catch(() => false);
     const menu = await Menu.new({
       items: [
         running
@@ -244,7 +251,7 @@ class Launcher {
         { id: "duplicate", text: t("Duplicate"), action: () => this.duplicate(id) },
         { id: "export", text: t("Export as Modpack…"), enabled: !this.activity[id], action: () => this.exportPack(id) },
         { item: "Separator" },
-        { id: "shortcut", text: SHORTCUT_LABEL, action: () => this.createShortcut(id) },
+        { id: "shortcut", text: hasShortcut ? REMOVE_SHORTCUT_LABEL : SHORTCUT_LABEL, action: () => this.toggleShortcut(id) },
         { id: "command", text: t("Copy Launch Command"), action: () => this.copyLaunchCommand(id) },
         { item: "Separator" },
         { id: "delete", text: DELETE_INSTANCE, enabled: !running, action: () => this.remove(id) },

@@ -244,6 +244,9 @@ export const api = {
   takePendingLaunch: () => invoke<string | null>("take_pending_launch"),
   /** Adds the instance to the OS's launcher; resolves to where it went. */
   createShortcut: (id: string) => invoke<string>("create_shortcut", { id }),
+  /** Also renames the menu bar's shortcut item to match. */
+  hasShortcut: (id: string) => invoke<boolean>("has_shortcut", { id }),
+  removeShortcut: (id: string) => invoke<string>("remove_shortcut", { id }),
   launchCommand: (id: string) => invoke<string>("launch_command", { id }),
   quit: () => invoke<void>("quit"),
   /** `null` for offline accounts, which have no skins on Mojang's servers. */

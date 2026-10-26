@@ -58,6 +58,49 @@ pub fn create(instance: &Instance, home: &Path, desktop: &Path) -> Result<PathBu
     }
 }
 
+/// The instance's shortcut, if one exists. On macOS the stub app is found by its bundle ID,
+/// so it's found even after the instance was renamed.
+pub fn find(instance: &Instance, home: &Path, desktop: &Path) -> Option<PathBuf> {
+    if cfg!(target_os = "macos") {
+        let folder = home.join("Applications").join("Clover Instances");
+        let marker = format!("<string>dev.blackdevlabs.clover.instance.{}</string>", instance.id);
+        std::fs::read_dir(folder).ok()?.filter_map(|e| e.ok()).map(|e| e.path()).find(|app| {
+            std::fs::read_to_string(app.join("Contents/Info.plist")).is_ok_and(|plist| plist.contains(&marker))
+        })
+    } else if cfg!(windows) {
+        Some(desktop.join(format!("{}.lnk", safe_name(&instance.name)))).filter(|link| link.exists())
+    } else {
+        Some(desktop_entry_path(home, instance)).filter(|entry| entry.exists())
+    }
+}
+
+/// Removes the instance's shortcut. Returns where it was.
+pub fn remove(instance: &Instance, home: &Path, desktop: &Path) -> Result<PathBuf> {
+    let place = find(instance, home, desktop).ok_or_else(|| msg("There's no shortcut for this instance."))?;
+    if place.is_dir() {
+        // Only ever Clover's own stub app.
+        std::fs::remove_dir_all(&place)?;
+    } else {
+        std::fs::remove_file(&place)?;
+    }
+    if !cfg!(target_os = "macos") && !cfg!(windows) {
+        let _ = std::fs::remove_file(desktop_icon_path(home, instance));
+    }
+    Ok(place)
+}
+
+fn data_home(home: &Path) -> PathBuf {
+    std::env::var_os("XDG_DATA_HOME").map(PathBuf::from).unwrap_or_else(|| home.join(".local/share"))
+}
+
+fn desktop_entry_path(home: &Path, instance: &Instance) -> PathBuf {
+    data_home(home).join("applications").join(format!("clover-{}.desktop", instance.id))
+}
+
+fn desktop_icon_path(home: &Path, instance: &Instance) -> PathBuf {
+    data_home(home).join("icons/hicolor/256x256/apps").join(format!("clover-{}.png", instance.id))
+}
+
 /// Characters that file systems or launchers trip over, replaced.
 fn safe_name(name: &str) -> String {
     let cleaned: String = name.chars().map(|c| if matches!(c, '/' | '\\' | ':' | '"' | '<' | '>' | '|' | '?' | '*') { '-' } else { c }).collect();
@@ -135,12 +178,11 @@ fn xml_escape(text: &str) -> String {
 
 /// A .desktop entry in ~/.local/share/applications, with the block icon beside it.
 fn desktop_entry(instance: &Instance, exe: &Path, home: &Path) -> Result<PathBuf> {
-    let share = std::env::var_os("XDG_DATA_HOME").map(PathBuf::from).unwrap_or_else(|| home.join(".local/share"));
-    let icon_path = share.join("icons/hicolor/256x256/apps").join(format!("clover-{}.png", instance.id));
+    let icon_path = desktop_icon_path(home, instance);
     std::fs::create_dir_all(icon_path.parent().expect("has parent"))?;
     std::fs::write(&icon_path, icon::png(&instance.id, 256)?)?;
 
-    let entry = share.join("applications").join(format!("clover-{}.desktop", instance.id));
+    let entry = desktop_entry_path(home, instance);
     std::fs::create_dir_all(entry.parent().expect("has parent"))?;
     std::fs::write(&entry, desktop_file(instance, exe, &icon_path))?;
     Ok(entry)
@@ -264,6 +306,12 @@ mod mac_tests {
         assert!(bundle.join("Contents/Resources/icon.icns").exists(), "sips made the icon");
         // macOS itself accepts the property list.
         assert!(std::process::Command::new("plutil").arg("-lint").arg(bundle.join("Contents/Info.plist")).status().unwrap().success());
+
+        // Found again after a rename, then removed.
+        let renamed = Instance { name: "Renamed".into(), ..instance };
+        assert_eq!(find(&renamed, &home, &home).as_deref(), Some(bundle.as_path()));
+        assert_eq!(remove(&renamed, &home, &home).unwrap(), bundle);
+        assert!(find(&renamed, &home, &home).is_none() && !bundle.exists());
         std::fs::remove_dir_all(home).unwrap();
     }
 }

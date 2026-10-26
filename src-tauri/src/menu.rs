@@ -19,6 +19,26 @@ const SHORTCUT_LABEL: &str = if cfg!(target_os = "macos") {
     "Add to App Launcher"
 };
 
+/// The removing counterpart of `SHORTCUT_LABEL`.
+const REMOVE_SHORTCUT_LABEL: &str = if cfg!(target_os = "macos") {
+    "Remove from Applications"
+} else if cfg!(windows) {
+    "Delete Desktop Shortcut"
+} else {
+    "Remove from App Launcher"
+};
+
+/// Names the shortcut item for what it will do to the selected instance.
+pub fn set_shortcut_label(app: &AppHandle, exists: bool) {
+    let Some(menu) = app.menu() else { return };
+    let label = tr(if exists { REMOVE_SHORTCUT_LABEL } else { SHORTCUT_LABEL });
+    for submenu in menu.items().unwrap_or_default().iter().filter_map(|i| i.as_submenu()) {
+        if let Some(item) = submenu.get("create_shortcut").and_then(|i| i.as_menuitem().cloned()) {
+            let _ = item.set_text(label.as_str());
+        }
+    }
+}
+
 /// Rebuilt whenever accounts change, so Game › Account always lists them.
 pub fn build(app: &AppHandle, accounts: &Accounts) -> tauri::Result<Menu<Wry>> {
     let item = |id: &str, label: &str, accel: Option<&str>| MenuItem::with_id(app, id, tr(label), true, accel);

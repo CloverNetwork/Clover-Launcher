@@ -35,7 +35,7 @@
     view_grid: () => launcher.setLayout("grid"),
     toggle_log: () => (launcher.logVisible = !launcher.logVisible),
     verify_files: () => launcher.verify(),
-    create_shortcut: () => launcher.createShortcut(),
+    create_shortcut: () => launcher.toggleShortcut(),
     edit_instance: () => launcher.edit(),
     duplicate_instance: () => launcher.duplicate(),
     export_instance: () => launcher.exportPack(),
@@ -123,6 +123,12 @@
       launcher.detailOpen = false;
     }
   }
+
+  // The menu bar's shortcut item adds or removes, depending on the selected instance.
+  $effect(() => {
+    const id = launcher.selectedId;
+    if (id && hasMenuBar) api.hasShortcut(id).catch(() => {});
+  });
 
   onMount(() => {
     document.body.classList.add("vibrant");

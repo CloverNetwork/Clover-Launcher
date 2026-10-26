@@ -33,6 +33,15 @@ export const SHORTCUT_LABEL = t(
   }[platform],
 );
 
+/** Undoing the shortcut, in the same words. */
+export const REMOVE_SHORTCUT_LABEL = t(
+  {
+    macos: "Remove from Applications",
+    windows: "Delete Desktop Shortcut",
+    linux: "Remove from App Launcher",
+  }[platform],
+);
+
 /** Deleted instances go to the system's bin, which each OS names differently. */
 export const TRASH = t({ macos: "Trash", windows: "Recycle Bin", linux: "Trash" }[platform]);
 

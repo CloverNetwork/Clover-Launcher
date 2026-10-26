@@ -42,9 +42,33 @@ fn create_shortcut(app: AppHandle, state: State<'_, AppState>, id: String) -> Re
     let home = ui(app.path().home_dir())?;
     let desktop = app.path().desktop_dir().unwrap_or_else(|_| home.join("Desktop"));
     let place = shortcuts::create(&instance, &home, &desktop)?;
+    menu::set_shortcut_label(&app, true);
     // Show it the way people read paths: ~/Applications/… rather than /Users/name/….
     let shown = place.strip_prefix(&home).map(|p| format!("~/{}", p.display())).unwrap_or_else(|_| place.display().to_string());
     Ok(shown)
+}
+
+/// Whether the instance has a shortcut. Also renames the menu bar's item to match, since it
+/// acts on the selected instance.
+#[tauri::command]
+fn has_shortcut(app: AppHandle, state: State<'_, AppState>, id: String) -> Result<bool> {
+    let instance = instances::get(&state.paths, &id)?;
+    let home = ui(app.path().home_dir())?;
+    let desktop = app.path().desktop_dir().unwrap_or_else(|_| home.join("Desktop"));
+    let exists = shortcuts::find(&instance, &home, &desktop).is_some();
+    menu::set_shortcut_label(&app, exists);
+    Ok(exists)
+}
+
+/// Removes an instance's shortcut. Returns where it was, written like `create_shortcut`'s.
+#[tauri::command]
+fn remove_shortcut(app: AppHandle, state: State<'_, AppState>, id: String) -> Result<String> {
+    let instance = instances::get(&state.paths, &id)?;
+    let home = ui(app.path().home_dir())?;
+    let desktop = app.path().desktop_dir().unwrap_or_else(|_| home.join("Desktop"));
+    let place = shortcuts::remove(&instance, &home, &desktop)?;
+    menu::set_shortcut_label(&app, false);
+    Ok(place.strip_prefix(&home).map(|p| format!("~/{}", p.display())).unwrap_or_else(|_| place.display().to_string()))
 }
 
 /// The command that starts an instance, for Hyprland keybinds and scripts.
@@ -819,6 +843,8 @@ pub fn run() {
             discord_built_in,
             get_instance,
             set_language,
+            has_shortcut,
+            remove_shortcut,
             save_server,
             remove_server,
             ping_server,
