@@ -13,7 +13,7 @@ use clover_core::loaders::{self, LoaderSource, LoaderVersion};
 use clover_core::manifest::{self, VersionEntry};
 use clover_core::paths::Paths;
 use clover_core::settings::{self, Settings};
-use clover_core::{auth, install, launch, mclogs, modpacks, mods, skins};
+use clover_core::{auth, hooks, install, launch, mclogs, modpacks, mods, skins};
 use reqwest::Client;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_opener::OpenerExt;
@@ -142,6 +142,19 @@ fn create_instance_from_profile(state: State<'_, AppState>, name: String, path: 
 }
 
 #[tauri::command]
+fn update_instance(state: State<'_, AppState>, running: State<'_, Running>, id: String, changes: instances::Changes) -> Result<Instance> {
+    if running.is_running(&id) {
+        return Err(msg("Quit the game before editing this instance."));
+    }
+    instances::update(&state.paths, &id, changes)
+}
+
+#[tauri::command]
+fn duplicate_instance(state: State<'_, AppState>, id: String) -> Result<Instance> {
+    instances::duplicate(&state.paths, &id)
+}
+
+#[tauri::command]
 fn delete_instance(state: State<'_, AppState>, running: State<'_, Running>, id: String) -> Result<()> {
     if running.is_running(&id) {
         return Err(msg("Stop the game before deleting this instance."));
@@ -180,9 +193,16 @@ async fn launch_instance(app: AppHandle, state: State<'_, AppState>, running: St
     // Only missing files download; Verify Game Files re-hashes everything.
     let installed = install::install(&state.http, &state.paths, &settings, &instance, Verify::Existing, &mut reporter).await?;
     let command = launch::build_command(&state.paths, &instance, &installed.resolved, &session, &settings, &installed.java)?;
+    if !instance.options.pre_launch.trim().is_empty() {
+        clover_core::install::Reporter::stage(&mut reporter, "Running the pre-launch command…");
+        hooks::run(&state.paths, &instance, &instance.options.pre_launch, Some(&installed.java))
+            .await
+            .map_err(|e| msg(format!("The pre-launch command failed: {e}")))?;
+    }
     let stop = running.start(&id);
     let (log_app, log_id) = (app.clone(), id.clone());
     let (exit_app, exit_id) = (app.clone(), id.clone());
+    let (hook_paths, hook_instance, hook_java) = (state.paths.clone(), instance.clone(), installed.java.clone());
     let started = game::spawn(
         command,
         stop,
@@ -190,6 +210,14 @@ async fn launch_instance(app: AppHandle, state: State<'_, AppState>, running: St
         move |code| {
             exit_app.state::<Running>().finished(&exit_id);
             events::emit_exit(&exit_app, &exit_id, code);
+            let command = hook_instance.options.post_exit.clone();
+            if !command.trim().is_empty() {
+                tauri::async_runtime::spawn(async move {
+                    if let Err(e) = hooks::run(&hook_paths, &hook_instance, &command, Some(&hook_java)).await {
+                        events::emit_log(&exit_app, &exit_id, format!("[Clover] The post-exit command failed: {e}"));
+                    }
+                });
+            }
         },
     );
     if let Err(e) = started {
@@ -557,6 +585,8 @@ pub fn run() {
             remove_loader_source,
             create_instance,
             create_instance_from_profile,
+            update_instance,
+            duplicate_instance,
             delete_instance,
             verify_instance,
             launch_instance,

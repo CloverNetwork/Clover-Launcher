@@ -20,9 +20,22 @@
 </script>
 
 <section class="grid-page" aria-labelledby="grid-title">
-  <h1 id="grid-title">Instances</h1>
+  <header>
+    <h1 id="grid-title">Instances</h1>
+    {#if launcher.instances.length > 1}
+      <label class="search">
+        <Icon name="search" size={12} />
+        <span class="visually-hidden">Search instances</span>
+        <input type="search" bind:value={launcher.query} placeholder="Search" autocomplete="off" spellcheck="false" />
+      </label>
+    {/if}
+  </header>
+  {#each launcher.groups as group, index (group.name)}
+  {#if group.name}
+    <h2>{group.name}</h2>
+  {/if}
   <ul class="grid">
-    {#each launcher.instances as instance (instance.id)}
+    {#each group.instances as instance (instance.id)}
       {@const activity = launcher.activity[instance.id]}
       {@const text = status(instance.id)}
       <li
@@ -51,6 +64,7 @@
         {/if}
       </li>
     {/each}
+    {#if index === launcher.groups.length - 1}
     <li class="card add">
       <button class="open" onclick={() => (launcher.newInstanceOpen = true)}>
         <span class="plus"><Icon name="plus" size={28} /></span>
@@ -58,7 +72,12 @@
       </button>
       <button class="import-link" onclick={() => (launcher.importOpen = true)}>Import Modpack…</button>
     </li>
+    {/if}
   </ul>
+  {/each}
+  {#if !launcher.groups.length}
+    <p class="secondary">No instances match “{launcher.query}”.</p>
+  {/if}
 </section>
 
 <style>
@@ -68,8 +87,47 @@
     padding: 4px 28px 28px;
   }
 
+  header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+
+  h2 {
+    margin: 22px 0 10px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+
+  .search {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 200px;
+    height: 26px;
+    padding: 0 8px;
+    border-radius: var(--radius-control);
+    background: var(--bg-control);
+    color: var(--text-secondary);
+  }
+
+  .search input {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    background: none;
+    outline: none;
+    font-size: 12px;
+  }
+
+  .search:focus-within {
+    box-shadow: var(--focus-ring);
+  }
+
   h1 {
-    margin: 0 0 16px;
+    margin: 0;
     font-size: 22px;
     font-weight: 600;
     letter-spacing: -0.01em;

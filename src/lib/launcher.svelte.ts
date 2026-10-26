@@ -18,6 +18,20 @@ function storedLayout(): Layout {
   }
 }
 
+const SORT_KEY = "clover.sort";
+
+export type Sort = "name" | "recent";
+
+export type InstanceGroup = { name: string | null; instances: Instance[] };
+
+function storedSort(): Sort {
+  try {
+    return localStorage.getItem(SORT_KEY) === "recent" ? "recent" : "name";
+  } catch {
+    return "name";
+  }
+}
+
 type Activity = "verifying" | "launching" | "running";
 
 class Launcher {
@@ -45,10 +59,58 @@ class Launcher {
   skinsOpen = $state(false);
   modsOpen = $state(false);
   importOpen = $state(false);
+  editOpen = $state(false);
+  /** Sidebar and grid filter. */
+  query = $state("");
+  sort = $state<Sort>(storedSort());
   /** Bumped when mods change, so lists showing them reload. */
   modsRevision = $state(0);
 
   selected = $derived(this.instances.find((i) => i.id === this.selectedId) ?? null);
+
+  /** Instances as the sidebar and grid show them: filtered, sorted, ungrouped first. */
+  groups = $derived.by<InstanceGroup[]>(() => {
+    const query = this.query.trim().toLowerCase();
+    const matching = this.instances.filter((i) => !query || i.name.toLowerCase().includes(query));
+    const sorted = [...matching].sort((a, b) =>
+      this.sort === "recent" ? (b.lastPlayed ?? 0) - (a.lastPlayed ?? 0) : a.name.localeCompare(b.name),
+    );
+    const byGroup = new Map<string | null, Instance[]>();
+    for (const instance of sorted) {
+      const group = instance.options?.group ?? null;
+      byGroup.set(group, [...(byGroup.get(group) ?? []), instance]);
+    }
+    return [...byGroup.entries()]
+      .sort(([a], [b]) => (a === null ? -1 : b === null ? 1 : a.localeCompare(b)))
+      .map(([name, instances]) => ({ name, instances }));
+  });
+
+  /** Every group name in use, for the Edit Instance suggestions. */
+  groupNames = $derived([...new Set(this.instances.map((i) => i.options?.group).filter((g): g is string => !!g))].sort());
+
+  setSort(sort: Sort) {
+    this.sort = sort;
+    try {
+      localStorage.setItem(SORT_KEY, sort);
+    } catch {
+      // Private storage just means the choice isn't remembered.
+    }
+  }
+
+  edit(id = this.selectedId) {
+    if (!id) return;
+    this.selectedId = id;
+    this.editOpen = true;
+  }
+
+  async duplicate(id = this.selectedId) {
+    if (!id) return;
+    try {
+      await this.select(await api.duplicateInstance(id));
+    } catch (e) {
+      this.error = { instanceId: id, message: errorText(e) };
+    }
+  }
 
   async init() {
     await Promise.all([
@@ -164,6 +226,9 @@ class Launcher {
         { item: "Separator" },
         { id: "show", text: SHOW_FOLDER, action: () => this.showFolder(id) },
         { id: "verify", text: "Verify Game Files", enabled: !this.activity[id], action: () => this.verify(id) },
+        { item: "Separator" },
+        { id: "edit", text: "Edit Instance…", enabled: !running, action: () => this.edit(id) },
+        { id: "duplicate", text: "Duplicate", action: () => this.duplicate(id) },
         { item: "Separator" },
         { id: "shortcut", text: SHORTCUT_LABEL, action: () => this.createShortcut(id) },
         { id: "command", text: "Copy Launch Command", action: () => this.copyLaunchCommand(id) },

@@ -108,7 +108,13 @@ pub async fn install(
 
     downloaded += download::run(client, tasks, verify, |done, total| reporter.files(done, total)).await?;
     link_client_jar(paths, &resolved, verify == Verify::Full)?;
-    let need = java::requirement(resolved.java.as_ref());
-    let java = java::find_or_install(client, paths, settings, &need, verify, reporter).await?;
+    // An instance's own Java beats automatic Java and the one in Settings.
+    let java = match instance.options.java_path.as_deref().filter(|p| !p.trim().is_empty()) {
+        Some(path) => PathBuf::from(path),
+        None => {
+            let need = java::requirement(resolved.java.as_ref());
+            java::find_or_install(client, paths, settings, &need, verify, reporter).await?
+        }
+    };
     Ok(Installed { resolved, java, downloaded })
 }

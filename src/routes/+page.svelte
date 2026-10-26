@@ -8,6 +8,7 @@
   import CloverLogo from "$lib/components/CloverLogo.svelte";
   import GameLog from "$lib/components/GameLog.svelte";
   import Icon from "$lib/components/Icon.svelte";
+  import EditInstanceSheet from "$lib/components/EditInstanceSheet.svelte";
   import ImportModpackSheet from "$lib/components/ImportModpackSheet.svelte";
   import InstanceDetail from "$lib/components/InstanceDetail.svelte";
   import InstanceGrid from "$lib/components/InstanceGrid.svelte";
@@ -33,6 +34,8 @@
     toggle_log: () => (launcher.logVisible = !launcher.logVisible),
     verify_files: () => launcher.verify(),
     create_shortcut: () => launcher.createShortcut(),
+    edit_instance: () => launcher.edit(),
+    duplicate_instance: () => launcher.duplicate(),
     add_account: () => (launcher.accountOpen = true),
     skins: () => launcher.account && (launcher.skinsOpen = true),
     sign_out: () => launcher.signOut(),
@@ -86,6 +89,8 @@
   const shortcuts: { key: string; shift?: boolean; command: string }[] = [
     { key: "n", command: "new_instance" },
     { key: "n", shift: true, command: "import_modpack" },
+    { key: "i", command: "edit_instance" },
+    { key: "d", command: "duplicate_instance" },
     { key: ",", command: "settings" },
     { key: "r", shift: true, command: "show_folder" },
     { key: "1", command: "view_sidebar" },
@@ -245,6 +250,7 @@
 <WardrobeSheet />
 <ModBrowserSheet />
 <ImportModpackSheet />
+<EditInstanceSheet />
 
 <style>
   .window {

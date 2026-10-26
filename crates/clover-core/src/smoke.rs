@@ -49,6 +49,7 @@ fn instance(loader: &str, game: &str, loader_version: Option<String>) -> Instanc
         created_at: 0,
         last_played: None,
         installed: false,
+        options: Default::default(),
     }
 }
 

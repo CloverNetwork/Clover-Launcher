@@ -64,8 +64,12 @@ pub fn build_command(
         vars.iter().fold(arg.to_string(), |acc, (key, value)| acc.replace(&format!("${{{key}}}"), value))
     };
 
-    let mut args = vec![format!("-Xmx{}M", settings.memory_mb)];
+    let options = &instance.options;
+    let memory = options.memory_mb.unwrap_or(settings.memory_mb);
+    let mut args = vec![format!("-Xmx{memory}M")];
     args.extend(flatten(&version.jvm_args));
+    // The person's own JVM arguments go after the version's, so theirs win.
+    args.extend(crate::hooks::split_args(&options.jvm_args));
     // Legacy versions declare no JVM arguments, and some loaders add a few without a classpath.
     if !args.iter().any(|a| a.contains("${classpath}")) {
         args.extend(["-Djava.library.path=${natives_directory}".into(), "-cp".into(), "${classpath}".into()]);
@@ -79,6 +83,11 @@ pub fn build_command(
     match (&version.legacy_game_args, game_args.is_empty()) {
         (Some(legacy), true) => args.extend(legacy.split_whitespace().map(String::from)),
         _ => args.extend(game_args),
+    }
+    if options.fullscreen {
+        args.push("--fullscreen".into());
+    } else if let (Some(width), Some(height)) = (options.width, options.height) {
+        args.extend(["--width".into(), width.to_string(), "--height".into(), height.to_string()]);
     }
 
     let mut command = Command::new(java);

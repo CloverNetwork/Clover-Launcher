@@ -12,6 +12,28 @@ export type Instance = {
   createdAt: number;
   lastPlayed: number | null;
   installed: boolean;
+  options: InstanceOptions;
+};
+
+/** What Edit Instance changes; empty values mean "use the defaults". */
+export type InstanceOptions = {
+  group: string | null;
+  memoryMb: number | null;
+  javaPath: string | null;
+  jvmArgs: string;
+  width: number | null;
+  height: number | null;
+  fullscreen: boolean;
+  preLaunch: string;
+  postExit: string;
+};
+
+export type InstanceChanges = {
+  name: string;
+  version: string;
+  loader: string;
+  loaderVersion: string | null;
+  options: InstanceOptions;
 };
 
 export type VersionEntry = { id: string; type: string; releaseTime: string };
@@ -110,6 +132,8 @@ export const api = {
   createInstanceFromProfile: (name: string, path: string) =>
     invoke<Instance>("create_instance_from_profile", { name, path }),
   deleteInstance: (id: string) => invoke<void>("delete_instance", { id }),
+  updateInstance: (id: string, changes: InstanceChanges) => invoke<Instance>("update_instance", { id, changes }),
+  duplicateInstance: (id: string) => invoke<Instance>("duplicate_instance", { id }),
   /** Re-hashes every file and replaces damaged ones. Resolves to the instance and how many files were replaced. */
   verifyInstance: (id: string) => invoke<[Instance, number]>("verify_instance", { id }),
   launchInstance: (id: string) => invoke<Instance>("launch_instance", { id }),

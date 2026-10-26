@@ -202,6 +202,7 @@ mod tests {
             created_at: 0,
             last_played: None,
             installed: true,
+            options: Default::default(),
         }
     }
 
@@ -248,6 +249,7 @@ mod mac_tests {
             created_at: 0,
             last_played: None,
             installed: true,
+            options: Default::default(),
         };
         let bundle = mac_app(&instance, Path::new("/Applications/Clover Launcher.app/Contents/MacOS/clover-launcher"), &home).unwrap();
         assert!(bundle.ends_with("Applications/Clover Instances/Survival- Hard.app"));

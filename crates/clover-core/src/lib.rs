@@ -6,6 +6,7 @@ pub mod auth;
 pub mod download;
 pub mod error;
 pub mod game;
+pub mod hooks;
 pub mod icon;
 pub mod install;
 pub mod instances;

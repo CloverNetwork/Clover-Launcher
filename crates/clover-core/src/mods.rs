@@ -658,6 +658,7 @@ mod tests {
             created_at: 0,
             last_played: None,
             installed: false,
+            options: Default::default(),
         }
     }
 
