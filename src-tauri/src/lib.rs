@@ -236,7 +236,7 @@ async fn launch_instance(
         running.finished(&id);
         return Err(e);
     }
-    presence::game_started(&app, &settings, &instance);
+    presence::game_started(&app, &settings, &instance, &session.profile.name);
     instance.installed = true;
     instance.profile_id = Some(installed.resolved.id);
     instance.last_played = Some(instances::now());
@@ -454,7 +454,7 @@ fn get_instance(state: State<'_, AppState>, id: String) -> Result<Instance> {
 
 #[tauri::command]
 fn discord_built_in() -> bool {
-    option_env!("DISCORD_APP_ID").is_some()
+    true
 }
 
 /// Installs the performance mods that exist for the instance.

@@ -12,11 +12,12 @@ use tokio::sync::Mutex;
 #[derive(Default)]
 pub struct Discord(Mutex<Option<Presence>>);
 
-pub fn game_started(app: &AppHandle, settings: &Settings, instance: &Instance) {
+pub fn game_started(app: &AppHandle, settings: &Settings, instance: &Instance, player: &str) {
     let Some(app_id) = settings.discord_app_id().filter(|_| settings.discord_status).map(String::from) else { return };
     let details = instance.name.clone();
     let state = format!("Minecraft {} · {}", instance.version, loaders::label(settings, instance));
     let started = instances::now();
+    let player = player.to_string();
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         let discord = app.state::<Discord>();
@@ -24,7 +25,7 @@ pub fn game_started(app: &AppHandle, settings: &Settings, instance: &Instance) {
         if presence.is_none() {
             *presence = Presence::connect(&app_id).await.ok();
         }
-        let activity = Activity { details: &details, state: &state, started };
+        let activity = Activity { details: &details, state: &state, started, player: Some(&player) };
         if let Some(connection) = presence.as_mut() {
             // A broken connection is dropped; the next game reconnects.
             if connection.set(Some(&activity)).await.is_err() {

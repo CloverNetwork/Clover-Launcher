@@ -24,6 +24,13 @@ pub struct Activity<'a> {
     pub state: &'a str,
     /// When play started, in seconds since 1970; Discord counts up from it.
     pub started: u64,
+    /// The player, shown as their head in the corner of the big image.
+    pub player: Option<&'a str>,
+}
+
+/// A player's head, rendered from their skin. Discord fetches the image itself.
+fn head_url(player: &str) -> String {
+    format!("https://render.crafty.gg/2d/head/{player}?size=256")
 }
 
 pub struct Presence {
@@ -102,11 +109,16 @@ impl Presence {
     /// Shows an activity, or clears it with `None`.
     pub async fn set(&mut self, activity: Option<&Activity<'_>>) -> Result<()> {
         let activity = activity.map(|a| {
+            let mut assets = json!({ "large_image": "clover", "large_text": "Clover Launcher" });
+            if let Some(player) = a.player {
+                assets["small_image"] = json!(head_url(player));
+                assets["small_text"] = json!(player);
+            }
             json!({
                 "details": a.details,
                 "state": a.state,
                 "timestamps": { "start": a.started },
-                "assets": { "large_image": "clover", "large_text": "Clover Launcher" },
+                "assets": assets,
             })
         });
         let command = json!({
@@ -154,12 +166,27 @@ mod tests {
         // Point the search at the fake socket.
         unsafe { std::env::set_var("XDG_RUNTIME_DIR", &dir) };
         let mut presence = Presence::connect("1234").await.unwrap();
-        let activity = Activity { details: "Survival", state: "Minecraft 1.21.4 · Fabric", started: 1_700_000_000 };
+        let activity = Activity { details: "Survival", state: "Minecraft 1.21.4 · Fabric", started: 1_700_000_000, player: Some("BlackDev") };
         presence.set(Some(&activity)).await.unwrap();
         let seen = fake.await.unwrap();
         assert_eq!((seen[0].0, &seen[0].1["client_id"]), (HANDSHAKE, &json!("1234")));
         assert_eq!(seen[1].1["args"]["activity"]["details"], "Survival");
         assert_eq!(seen[1].1["args"]["activity"]["timestamps"]["start"], 1_700_000_000);
+        assert_eq!(seen[1].1["args"]["activity"]["assets"]["small_image"], "https://render.crafty.gg/2d/head/BlackDev?size=256");
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    /// Shows a status in the Discord app running on this computer for 20 seconds.
+    /// `cargo test shows_a_real_status -- --ignored --nocapture`
+    #[tokio::test]
+    #[ignore]
+    async fn shows_a_real_status() {
+        let mut presence = Presence::connect("1564310184371691560").await.unwrap();
+        let started = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+        let activity = Activity { details: "Fabric 1.21.4", state: "Minecraft 1.21.4 · Fabric", started, player: Some("BlackDev") };
+        presence.set(Some(&activity)).await.unwrap();
+        println!("status set; check Discord");
+        tokio::time::sleep(Duration::from_secs(20)).await;
+        presence.set(None).await.unwrap();
     }
 }

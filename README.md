@@ -73,6 +73,5 @@ CurseForge mods need an API key approved for third-party apps
 Settings, or build it in with `CURSEFORGE_API_KEY='...' pnpm tauri build`. Use single quotes,
 because keys contain `$`.
 
-The Discord status needs a Discord application (Developer Portal → New Application; add an image
-named `clover` under Rich Presence → Art Assets). Build its ID in with `DISCORD_APP_ID=...`, or
-paste it in Settings.
+The Discord status uses the Clover Launcher application on Discord, with the player's head from
+render.crafty.gg as the small image. Builds can use another application with `DISCORD_APP_ID=...`.

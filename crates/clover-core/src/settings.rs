@@ -24,6 +24,9 @@ pub struct Settings {
     pub discord_app_id: String,
 }
 
+/// The "Clover Launcher" application on Discord, whose name the status shows.
+const CLOVER_DISCORD_APP_ID: &str = "1564310184371691560";
+
 impl Default for Settings {
     fn default() -> Self {
         Self { java_path: String::new(), memory_mb: 4096, loader_sources: vec![], curseforge_api_key: String::new(), show_window_buttons: false, discord_status: true, discord_app_id: String::new() }
@@ -39,9 +42,13 @@ impl Settings {
         Some(self.curseforge_api_key.trim()).filter(|k| !k.is_empty()).or(option_env!("CURSEFORGE_API_KEY"))
     }
 
-    /// The Discord application ID from Settings, or one built in with `DISCORD_APP_ID`.
+    /// The Discord application ID from Settings, or one built in with `DISCORD_APP_ID`, or
+    /// Clover's own. Application IDs are public, so Clover's lives in the source.
     pub fn discord_app_id(&self) -> Option<&str> {
-        Some(self.discord_app_id.trim()).filter(|k| !k.is_empty()).or(option_env!("DISCORD_APP_ID"))
+        Some(self.discord_app_id.trim())
+            .filter(|k| !k.is_empty())
+            .or(option_env!("DISCORD_APP_ID"))
+            .or(Some(CLOVER_DISCORD_APP_ID))
     }
 
     pub fn custom_java(&self) -> Option<&str> {
