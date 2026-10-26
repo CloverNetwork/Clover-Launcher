@@ -3,6 +3,7 @@
   import { openUrl } from "@tauri-apps/plugin-opener";
   import { api, errorText } from "$lib/api";
   import Icon from "./Icon.svelte";
+  import { t } from "$lib/i18n";
   import WindowControls from "./WindowControls.svelte";
 
   let {
@@ -48,8 +49,8 @@
 
   async function upload() {
     const confirmed = await ask(
-      "Anyone with the link can read it. Clover removes your access token and home folder first, and mclo.gs also hides IP addresses.",
-      { title: "Upload this log to mclo.gs?", okLabel: "Upload", cancelLabel: "Cancel" },
+      t("Anyone with the link can read it. Clover removes your access token and home folder first, and mclo.gs also hides IP addresses."),
+      { title: t("Upload this log to mclo.gs?"), okLabel: t("Upload"), cancelLabel: t("Cancel") },
     );
     if (!confirmed) return;
     uploading = true;
@@ -73,35 +74,35 @@
   }
 </script>
 
-<section class="log" class:standalone aria-label="Game Log">
+<section class="log" class:standalone aria-label={t("Game Log")}>
   <header>
-    <h2>Game Log</h2>
+    <h2>{t("Game Log")}</h2>
     <p class="status" role="status" aria-live="polite">
       {#if uploading}
-        <span class="secondary">Uploading…</span>
+        <span class="secondary">{t("Uploading…")}</span>
       {:else if error}
         <span class="error">{error}</span>
       {:else if shared}
         <button class="link" onclick={() => openUrl(shared!)}>{shared.replace(/^https?:\/\//, "")}</button>
-        <button class="link" onclick={copy}>{copied ? "Copied" : "Copy Link"}</button>
+        <button class="link" onclick={copy}>{copied ? t("Copied") : t("Copy Link")}</button>
       {/if}
     </p>
     <button
       class="icon-button"
-      aria-label="Upload to mclo.gs"
-      title="Upload to mclo.gs"
+      aria-label={t("Upload to mclo.gs")}
+      title={t("Upload to mclo.gs")}
       disabled={uploading || !lines.length}
       onclick={upload}
     >
       <Icon name="upload" size={14} />
     </button>
     {#if onPopOut}
-      <button class="icon-button" aria-label="Open in Separate Window" title="Open in Separate Window" onclick={onPopOut}>
+      <button class="icon-button" aria-label={t("Open in Separate Window")} title={t("Open in Separate Window")} onclick={onPopOut}>
         <Icon name="popout" size={14} />
       </button>
     {/if}
     {#if onPopIn}
-      <button class="icon-button" aria-label="Show in Main Window" title="Show in Main Window" onclick={onPopIn}>
+      <button class="icon-button" aria-label={t("Show in Main Window")} title={t("Show in Main Window")} onclick={onPopIn}>
         <Icon name="popin" size={14} />
       </button>
     {/if}
@@ -115,7 +116,7 @@
     {#if lines.length}
       <pre>{lines.join("\n")}</pre>
     {:else}
-      <p class="secondary">Output from the game appears here while it runs.</p>
+      <p class="secondary">{t("Output from the game appears here while it runs.")}</p>
     {/if}
   </div>
 </section>

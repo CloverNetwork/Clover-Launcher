@@ -2,6 +2,7 @@
   import { open } from "@tauri-apps/plugin-dialog";
   import { api, errorText, type LoaderVersion, type VersionEntry } from "$lib/api";
   import { launcher } from "$lib/launcher.svelte";
+  import { t } from "$lib/i18n";
 
   /** Pseudo-loader for importing any launcher profile JSON. */
   const IMPORT = "custom";
@@ -59,7 +60,7 @@
         versions = list;
         if (!list.some((v) => v.id === version)) version = list[0]?.id ?? "";
       })
-      .catch((e) => (error = `Couldn't load Minecraft versions. ${errorText(e)}`))
+      .catch((e) => (error = t("Couldn't load Minecraft versions. {error}", { error: errorText(e) })))
       .finally(() => (loadingVersions = false));
   });
 
@@ -92,8 +93,8 @@
 
   async function chooseProfile() {
     const path = await open({
-      title: "Choose a Launcher Profile",
-      filters: [{ name: "Launcher Profile", extensions: ["json"] }],
+      title: t("Choose a Launcher Profile"),
+      filters: [{ name: t("Launcher Profile"), extensions: ["json"] }],
     });
     if (typeof path === "string") profilePath = path;
   }
@@ -122,11 +123,11 @@
   onclose={() => (launcher.newInstanceOpen = false)}
 >
   <form onsubmit={submit}>
-    <h2 id="new-instance-title">New Instance</h2>
-    <p class="intro secondary">Each instance keeps its own worlds, mods and settings.</p>
+    <h2 id="new-instance-title">{t("New Instance")}</h2>
+    <p class="intro secondary">{t("Each instance keeps its own worlds, mods and settings.")}</p>
 
     <div class="grid">
-      <label for="instance-name">Name</label>
+      <label for="instance-name">{t("Name")}</label>
       <input
         id="instance-name"
         class="field"
@@ -137,36 +138,35 @@
         required
       />
 
-      <label for="instance-loader">Mod Loader</label>
+      <label for="instance-loader">{t("Mod Loader")}</label>
       <select id="instance-loader" class="field" bind:value={loader}>
-        <option value="vanilla">None</option>
-        <optgroup label="Mod Loaders">
+        <option value="vanilla">{t("None")}</option>
+        <optgroup label={t("Mod Loaders")}>
           {#each builtinLoaders as source (source.id)}
             <option value={source.id}>{source.name}</option>
           {/each}
         </optgroup>
         {#if customLoaders.length}
-          <optgroup label="Added in Settings">
+          <optgroup label={t("Added in Settings")}>
             {#each customLoaders as source (source.id)}
               <option value={source.id}>{source.name}</option>
             {/each}
           </optgroup>
         {/if}
-        <optgroup label="Other">
-          <option value={IMPORT}>Import Launcher Profile…</option>
+        <optgroup label={t("Other")}>
+          <option value={IMPORT}>{t("Import Launcher Profile…")}</option>
         </optgroup>
       </select>
 
       {#if importing}
-        <span class="label">Profile</span>
+        <span class="label">{t("Profile")}</span>
         <div>
           <div class="file">
-            <button type="button" class="button" onclick={chooseProfile}>Choose File…</button>
-            <span class="secondary file-name">{profileFile ?? "No file chosen"}</span>
+            <button type="button" class="button" onclick={chooseProfile}>{t("Choose File…")}</button>
+            <span class="secondary file-name">{profileFile ?? t("No file chosen")}</span>
           </div>
           <p class="hint secondary">
-            Any launcher profile JSON works, including ones made by a loader's own installer. Clover downloads the
-            Minecraft version it builds on.
+            {t("Any launcher profile JSON works, including ones made by a loader's own installer. Clover downloads the Minecraft version it builds on.")}
           </p>
         </div>
       {:else}
@@ -174,7 +174,7 @@
         <div>
           <select id="instance-version" class="field" bind:value={version} disabled={loadingVersions && !versions.length}>
             {#if loadingVersions && !versions.length}
-              <option value="">Loading versions…</option>
+              <option value="">{t("Loading versions…")}</option>
             {/if}
             {#each versions as v (v.id)}
               <option value={v.id}>{v.id}{v.type === "release" ? "" : ` (${v.type.replace("old_", "").replace("_", " ")})`}</option>
@@ -182,15 +182,15 @@
           </select>
           <label class="checkbox">
             <input type="checkbox" bind:checked={showAll} />
-            Show snapshots and old versions
+            {t("Show snapshots and old versions")}
           </label>
         </div>
 
         {#if loader !== "vanilla"}
-          <label for="loader-version">{loaderName} Version</label>
+          <label for="loader-version">{t("{loader} Version", { loader: loaderName })}</label>
           <div>
             {#if loadingLoaderVersions}
-              <select id="loader-version" class="field" disabled><option>Loading versions…</option></select>
+              <select id="loader-version" class="field" disabled><option>{t("Loading versions…")}</option></select>
             {:else if loaderVersions.length}
               <select id="loader-version" class="field" bind:value={loaderVersion}>
                 {#each loaderVersions as v (v.version)}
@@ -199,8 +199,7 @@
               </select>
             {:else}
               <p class="unavailable secondary" role="status">
-                {loaderName} isn't available for Minecraft {version}. Try another version, or turn on old versions for
-                legacy loaders.
+                {t("{loader} isn't available for Minecraft {version}. Try another version, or turn on old versions for legacy loaders.", { loader: loaderName, version })}
               </p>
             {/if}
           </div>
@@ -221,10 +220,10 @@
           launcher.importOpen = true;
         }}
       >
-        Import Modpack…
+        {t("Import Modpack…")}
       </button>
-      <button type="button" class="button" onclick={() => (launcher.newInstanceOpen = false)}>Cancel</button>
-      <button type="submit" class="button default" disabled={!canCreate}>Create</button>
+      <button type="button" class="button" onclick={() => (launcher.newInstanceOpen = false)}>{t("Cancel")}</button>
+      <button type="submit" class="button default" disabled={!canCreate}>{t("Create")}</button>
     </div>
   </form>
 </dialog>

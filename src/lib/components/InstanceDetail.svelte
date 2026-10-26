@@ -8,6 +8,7 @@
   import ServersSection from "./ServersSection.svelte";
   import WorldsSection from "./WorldsSection.svelte";
   import { SHOW_FOLDER } from "$lib/platform";
+  import { locale, t } from "$lib/i18n";
 
   let { instance }: { instance: Instance } = $props();
 
@@ -15,12 +16,12 @@
   const modded = $derived(instance.loader !== "vanilla" && instance.loader !== "custom");
   // Shader packs need Iris or OptiFine, which are mods.
   const tabs = $derived<{ id: Tab; label: string }[]>([
-    ...(modded ? [{ id: "mods" as const, label: "Mods" }] : []),
-    { id: "resourcepacks", label: "Resource Packs" },
-    ...(modded ? [{ id: "shaders" as const, label: "Shaders" }] : []),
-    { id: "worlds", label: "Worlds" },
-    { id: "servers", label: "Servers" },
-    { id: "screenshots", label: "Screenshots" },
+    ...(modded ? [{ id: "mods" as const, label: t("Mods") }] : []),
+    { id: "resourcepacks", label: t("Resource Packs") },
+    ...(modded ? [{ id: "shaders" as const, label: t("Shaders") }] : []),
+    { id: "worlds", label: t("Worlds") },
+    { id: "servers", label: t("Servers") },
+    { id: "screenshots", label: t("Screenshots") },
   ]);
   let chosen = $state<Tab>("mods");
   const tab = $derived(tabs.some((t) => t.id === chosen) ? chosen : tabs[0].id);
@@ -42,26 +43,26 @@
   const crash = $derived(launcher.crash?.instanceId === instance.id ? launcher.crash : null);
   const busy = $derived(activity === "launching" || activity === "verifying");
 
-  const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
-  const formatDate = (seconds: number | null) => (seconds ? dateFormat.format(seconds * 1000) : "Never");
+  const dateFormat = new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" });
+  const formatDate = (seconds: number | null) => (seconds ? dateFormat.format(seconds * 1000) : t("Never"));
 
   /** "3 hr 20 min", "45 min", or "Less than a minute". */
   function formatDuration(seconds: number) {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
-    if (!hours && !minutes) return seconds ? "Less than a minute" : "None yet";
+    if (!hours && !minutes) return seconds ? t("Less than a minute") : t("None yet");
     const unit = (value: number, style: "hour" | "minute") =>
-      new Intl.NumberFormat(undefined, { style: "unit", unit: style, unitDisplay: "short" }).format(value);
+      new Intl.NumberFormat(locale, { style: "unit", unit: style, unitDisplay: "short" }).format(value);
     return [hours ? unit(hours, "hour") : "", minutes ? unit(minutes, "minute") : ""].filter(Boolean).join(" ");
   }
 
   const status = $derived.by(() => {
-    if (activity === "running") return "Playing";
+    if (activity === "running") return t("Playing");
     if (busy && progress && progress.total > 0 && progress.done < progress.total)
-      return `Downloading ${progress.total.toLocaleString()} files: ${progress.done.toLocaleString()} done`;
+      return t("Downloading {total} files: {done} done", { total: progress.total.toLocaleString(locale), done: progress.done.toLocaleString(locale) });
     if (busy && progress?.stage) return progress.stage;
-    if (activity === "launching") return "Starting Minecraft…";
-    if (activity === "verifying") return "Verifying game files…";
+    if (activity === "launching") return t("Starting Minecraft…");
+    if (activity === "verifying") return t("Verifying game files…");
     return notice;
   });
 </script>
@@ -76,18 +77,18 @@
       <div class="play-row">
         {#if activity === "running"}
           <button class="play stop" onclick={() => launcher.stop(instance.id)}>
-            <Icon name="stop" size={12} /> Stop
+            <Icon name="stop" size={12} /> {t("Stop")}
           </button>
         {:else}
           <button class="play" disabled={!!activity} onclick={() => launcher.play(instance.id)}>
-            <Icon name="play" size={12} /> Play
+            <Icon name="play" size={12} /> {t("Play")}
           </button>
         {/if}
         <span class="status secondary" role="status" aria-live="polite">{status ?? ""}</span>
       </div>
 
       {#if busy && progress && progress.total > 0}
-        <progress max={progress.total} value={progress.done} aria-label="Download progress"></progress>
+        <progress max={progress.total} value={progress.done} aria-label={t("Download progress")}></progress>
       {/if}
     </div>
   </header>
@@ -102,11 +103,11 @@
           onclick={() => {
             launcher.error = null;
             launcher.crash = null;
-          }}>Dismiss</button
+          }}>{t("Dismiss")}</button
         >
       </div>
       {#if crash}
-        <ul class="findings" aria-label="Likely causes">
+        <ul class="findings" aria-label={t("Likely causes")}>
           {#each crash.findings as finding, index (index)}
             {@const done = crash.done[index]}
             <li>
@@ -127,16 +128,16 @@
   {/if}
 
   <dl class="facts">
-    <div><dt>Last Played</dt><dd>{formatDate(instance.lastPlayed)}</dd></div>
-    <div><dt>Time Played</dt><dd>{formatDuration(instance.playSeconds ?? 0)}</dd></div>
-    <div><dt>Created</dt><dd>{formatDate(instance.createdAt)}</dd></div>
+    <div><dt>{t("Last Played")}</dt><dd>{formatDate(instance.lastPlayed)}</dd></div>
+    <div><dt>{t("Time Played")}</dt><dd>{formatDuration(instance.playSeconds ?? 0)}</dd></div>
+    <div><dt>{t("Created")}</dt><dd>{formatDate(instance.createdAt)}</dd></div>
     <div>
-      <dt>Game Folder</dt>
+      <dt>{t("Game Folder")}</dt>
       <dd><button class="link" onclick={() => launcher.showFolder(instance.id)}>{SHOW_FOLDER}</button></dd>
     </div>
   </dl>
 
-  <div class="tabs" role="tablist" aria-label="Instance contents" tabindex="-1" onkeydown={onTabKey}>
+  <div class="tabs" role="tablist" aria-label={t("Instance contents")} tabindex="-1" onkeydown={onTabKey}>
     {#each tabs as t (t.id)}
       <button
         role="tab"

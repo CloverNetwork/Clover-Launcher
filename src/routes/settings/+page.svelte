@@ -6,6 +6,8 @@
   import WindowControls from "$lib/components/WindowControls.svelte";
   import { getVersion } from "@tauri-apps/api/app";
   import { updates } from "$lib/updates.svelte";
+  import { relaunch } from "@tauri-apps/plugin-process";
+  import { locale, setLanguage, storedLanguage, t, type Language } from "$lib/i18n";
 
   let settings = $state<Settings | null>(null);
   let error = $state<string | null>(null);
@@ -22,7 +24,7 @@
     checkingKey = true;
     try {
       await api.checkCurseforgeKey(settings!.curseforgeApiKey);
-      keyCheck = { ok: true, text: "CurseForge accepted this key." };
+      keyCheck = { ok: true, text: t("CurseForge accepted this key.") };
     } catch (e) {
       keyCheck = { ok: false, text: errorText(e) };
     } finally {
@@ -33,6 +35,8 @@
   let chrome = $state<WindowChrome | null>(null);
   let version = $state("");
   let discordBuiltIn = $state(true);
+  const startLanguage = storedLanguage();
+  let chosenLanguage = $state<Language>(startLanguage);
 
   onMount(async () => {
     chrome = await api.windowChrome();
@@ -74,31 +78,30 @@
     settings!.loaderSources = settings!.loaderSources.filter((s) => s.id !== source.id);
   }
 
-  const gigabytes = (mb: number) => `${(mb / 1024).toLocaleString(undefined, { maximumFractionDigits: 1 })} GB`;
+  const gigabytes = (mb: number) => `${(mb / 1024).toLocaleString(locale, { maximumFractionDigits: 1 })} GB`;
 </script>
 
 {#if settings}
   <div class="window">
     <div class="window-controls"><WindowControls /></div>
     <form class="settings" onsubmit={(e) => e.preventDefault()}>
-      <label for="java">Java:</label>
+      <label for="java">{t("Java:")}</label>
       <div>
         <input
           id="java"
           class="field"
           bind:value={settings.javaPath}
           oninput={save}
-          placeholder="Automatic"
+          placeholder={t("Automatic")}
           spellcheck="false"
           autocomplete="off"
         />
         <p class="hint secondary">
-          Leave empty to use the Java each Minecraft version needs. Clover downloads it if this computer doesn't
-          have it. Enter a path to use one Java for everything.
+          {t("Leave empty to use the Java each Minecraft version needs. Clover downloads it if this computer doesn't have it. Enter a path to use one Java for everything.")}
         </p>
       </div>
 
-      <label for="memory">Memory:</label>
+      <label for="memory">{t("Memory:")}</label>
       <div>
         <div class="slider">
           <input
@@ -113,7 +116,7 @@
           />
           <output for="memory">{gigabytes(settings.memoryMb)}</output>
         </div>
-        <p class="hint secondary">Maximum memory Minecraft can use. 4 GB suits most worlds; modded packs may need more.</p>
+        <p class="hint secondary">{t("Maximum memory Minecraft can use. 4 GB suits most worlds; modded packs may need more.")}</p>
       </div>
 
       <label for="curseforge">CurseForge:</label>
@@ -128,67 +131,82 @@
               keyCheck = null;
               save();
             }}
-            placeholder="API key"
+            placeholder={t("API key")}
             spellcheck="false"
             autocomplete="off"
           />
           <button type="button" class="button" disabled={checkingKey || !settings.curseforgeApiKey.trim()} onclick={checkKey}>
-            {checkingKey ? "Checking…" : "Check Key"}
+            {checkingKey ? t("Checking…") : t("Check Key")}
           </button>
         </div>
         {#if keyCheck}
           <p class="hint" class:ok={keyCheck.ok} class:bad={!keyCheck.ok} role="status">{keyCheck.text}</p>
         {/if}
         <p class="hint secondary">
-          Needed only for CurseForge mods; Modrinth works without one. CurseForge gives launchers access through a key
-          approved for third-party apps, which you
-          <button type="button" class="inline-link" onclick={() => openUrl(CURSEFORGE_KEY_FORM)}>apply for here</button>.
-          Personal keys from the CurseForge console usually aren't accepted.
+          {t("Needed only for CurseForge mods; Modrinth works without one. CurseForge gives launchers access through a key approved for third-party apps, which you")}
+          <button type="button" class="inline-link" onclick={() => openUrl(CURSEFORGE_KEY_FORM)}>{t("apply for here")}</button>.
+          {t("Personal keys from the CurseForge console usually aren't accepted.")}
         </p>
       </div>
 
-      <span class="label">Discord:</span>
+      <span class="label">{t("Discord:")}</span>
       <div>
         <label class="checkbox">
           <input type="checkbox" bind:checked={settings.discordStatus} onchange={save} />
-          Show what I'm playing as my status
+          {t("Show what I'm playing as my status")}
         </label>
         {#if settings.discordStatus && !discordBuiltIn}
           <input
             class="field discord-id"
             bind:value={settings.discordAppId}
             oninput={save}
-            placeholder="Application ID"
-            aria-label="Discord application ID"
+            placeholder={t("Application ID")}
+            aria-label={t("Discord application ID")}
             spellcheck="false"
             autocomplete="off"
           />
           <p class="hint secondary">
-            The status names a Discord application. Create one in the Discord Developer Portal and paste its ID here.
+            {t("The status names a Discord application. Create one in the Discord Developer Portal and paste its ID here.")}
           </p>
         {:else}
-          <p class="hint secondary">Discord shows the instance and Minecraft version while you play.</p>
+          <p class="hint secondary">{t("Discord shows the instance and Minecraft version while you play.")}</p>
         {/if}
       </div>
 
       {#if chrome?.hyprland}
-        <span class="label">Window:</span>
+        <span class="label">{t("Window:")}</span>
         <div>
           <label class="checkbox">
             <input type="checkbox" bind:checked={settings.showWindowButtons} onchange={save} />
-            Show Full Screen and Quit buttons
+            {t("Show Full Screen and Quit buttons")}
           </label>
           <p class="hint secondary">
-            Hyprland arranges windows with your keybindings, so Clover's windows have no title bar. Turn this on to add
-            buttons for full screen and quitting. There's no minimize button, since Hyprland doesn't minimize windows.
+            {t("Hyprland arranges windows with your keybindings, so Clover's windows have no title bar. Turn this on to add buttons for full screen and quitting. There's no minimize button, since Hyprland doesn't minimize windows.")}
           </p>
         </div>
       {/if}
 
-      <span class="label">Version:</span>
+      <label for="language">{t("Language:")}</label>
+      <div>
+        <div class="key-row">
+          <select id="language" class="field" bind:value={chosenLanguage} onchange={() => setLanguage(chosenLanguage)}>
+            <option value="system">{t("Same as System")}</option>
+            <option value="en">English</option>
+            <option value="de">Deutsch</option>
+          </select>
+          {#if chosenLanguage !== startLanguage}
+            <button type="button" class="button" onclick={() => relaunch()}>{t("Restart Clover")}</button>
+          {/if}
+        </div>
+        {#if chosenLanguage !== startLanguage}
+          <p class="hint secondary">{t("The new language shows after Clover restarts.")}</p>
+        {/if}
+      </div>
+
+      <span class="label">{t("Version:")}</span>
       <div class="key-row">
         <span>Clover {version}</span>
-        <button type="button" class="button" onclick={() => updates.check(true)}>Check for Updates</button>
+        <button type="button" class="button" onclick={() => updates.check(true)}>{t("Check for Updates")}</button>
       </div>
 
       {#if error}
@@ -197,10 +215,9 @@
     </form>
 
     <section class="sources" aria-labelledby="sources-title">
-      <h2 id="sources-title">Extra Mod Loaders</h2>
+      <h2 id="sources-title">{t("Extra Mod Loaders")}</h2>
       <p class="hint secondary">
-        Add any loader with a Fabric-compatible meta server, like a fork of Fabric or Quilt. Loaders with their own
-        installer can be added to an instance with Import Launcher Profile instead.
+        {t("Add any loader with a Fabric-compatible meta server, like a fork of Fabric or Quilt. Loaders with their own installer can be added to an instance with Import Launcher Profile instead.")}
       </p>
 
       {#if settings.loaderSources.length}
@@ -211,16 +228,16 @@
                 <strong>{source.name}</strong>
                 <span class="secondary">{source.url}/versions/{source.loaderPath}</span>
               </div>
-              <button type="button" class="button destructive" onclick={() => removeSource(source)}>Remove</button>
+              <button type="button" class="button destructive" onclick={() => removeSource(source)}>{t("Remove")}</button>
             </li>
           {/each}
         </ul>
       {/if}
 
       <form class="add" onsubmit={addSource}>
-        <label for="source-name">Name:</label>
-        <input id="source-name" class="field" bind:value={sourceName} placeholder="My Loader" autocomplete="off" />
-        <label for="source-url">Meta Server:</label>
+        <label for="source-name">{t("Name:")}</label>
+        <input id="source-name" class="field" bind:value={sourceName} placeholder={t("My Loader")} autocomplete="off" />
+        <label for="source-url">{t("Meta Server:")}</label>
         <input
           id="source-url"
           class="field"
@@ -229,7 +246,7 @@
           spellcheck="false"
           autocomplete="off"
         />
-        <label for="source-path">Loader Path:</label>
+        <label for="source-path">{t("Loader Path:")}</label>
         <input
           id="source-path"
           class="field"
@@ -243,7 +260,7 @@
           {#if sourceError}
             <p class="error" role="alert">{sourceError}</p>
           {/if}
-          <button type="submit" class="button" disabled={!sourceName.trim() || !sourceUrl.trim()}>Add Loader</button>
+          <button type="submit" class="button" disabled={!sourceName.trim() || !sourceUrl.trim()}>{t("Add Loader")}</button>
         </div>
       </form>
     </section>

@@ -2,6 +2,7 @@
 <script lang="ts">
   import { launcher } from "$lib/launcher.svelte";
   import ContentSection from "./ContentSection.svelte";
+  import { t } from "$lib/i18n";
 
   let dialog: HTMLDialogElement | undefined = $state();
   const instance = $derived(launcher.selected);
@@ -13,14 +14,14 @@
   });
 </script>
 
-<dialog class="sheet datapacks" bind:this={dialog} aria-label="Data Packs for {world?.name ?? ''}" onclose={() => (launcher.dataPacksWorld = null)}>
+<dialog class="sheet datapacks" bind:this={dialog} aria-label={t("Data Packs for {name}", { name: world?.name ?? "" })} onclose={() => (launcher.dataPacksWorld = null)}>
   {#if world && instance}
     <div class="scroll">
       <ContentSection {instance} place={{ kind: "datapack", world: world.folder }} subtitle={world.name} />
     </div>
   {/if}
   <div class="actions">
-    <button class="button default" onclick={() => (launcher.dataPacksWorld = null)}>Done</button>
+    <button class="button default" onclick={() => (launcher.dataPacksWorld = null)}>{t("Done")}</button>
   </div>
 </dialog>
 

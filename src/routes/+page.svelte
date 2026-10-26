@@ -20,6 +20,7 @@
   import WindowControls from "$lib/components/WindowControls.svelte";
   import { commandKey, hasMenuBar, SETTINGS } from "$lib/platform";
   import { updates } from "$lib/updates.svelte";
+  import { t } from "$lib/i18n";
 
   const menuActions: Record<string, () => void> = {
     new_instance: () => (launcher.newInstanceOpen = true),
@@ -59,7 +60,7 @@
     const accounts = await Promise.all(
       launcher.accounts.map((account) =>
         CheckMenuItem.new({
-          text: account.offline ? `${account.name} (Offline)` : account.name,
+          text: account.offline ? t("{name} (Offline)", { name: account.name }) : account.name,
           checked: account.uuid === launcher.activeAccountId,
           action: () => launcher.switchAccount(account.uuid),
         }),
@@ -69,10 +70,10 @@
       items: [
         ...accounts,
         await PredefinedMenuItem.new({ item: "Separator" }),
-        await MenuItem.new({ text: "Skins & Capes…", accelerator: "CmdOrCtrl+Shift+K", action: () => (launcher.skinsOpen = true) }),
+        await MenuItem.new({ text: t("Skins & Capes…"), accelerator: "CmdOrCtrl+Shift+K", action: () => (launcher.skinsOpen = true) }),
         await PredefinedMenuItem.new({ item: "Separator" }),
-        await MenuItem.new({ text: "Add Account…", action: () => (launcher.accountOpen = true) }),
-        await MenuItem.new({ text: `Sign Out ${launcher.account?.name ?? ""}`.trim(), action: () => launcher.signOut() }),
+        await MenuItem.new({ text: t("Add Account…"), action: () => (launcher.accountOpen = true) }),
+        await MenuItem.new({ text: t("Sign Out {name}", { name: launcher.account?.name ?? "" }).trim(), action: () => launcher.signOut() }),
       ],
     });
     const rect = button.getBoundingClientRect();
@@ -154,8 +155,8 @@
       {#if !grid && !launcher.sidebarVisible}
         <button
           class="icon-button"
-          aria-label="Show Sidebar"
-          title="Show Sidebar"
+          aria-label={t("Show Sidebar")}
+          title={t("Show Sidebar")}
           onclick={() => (launcher.sidebarVisible = true)}
         >
           <Icon name="sidebar" />
@@ -164,29 +165,29 @@
       {#if grid && launcher.detailOpen}
         <button class="back" onclick={() => (launcher.detailOpen = false)}>
           <Icon name="back" />
-          All Instances
+          {t("All Instances")}
         </button>
       {/if}
       <div class="spacer" data-tauri-drag-region></div>
-      <div class="view-switch" role="radiogroup" aria-label="View instances as">
+      <div class="view-switch" role="radiogroup" aria-label={t("View instances as")}>
         <button
           role="radio"
           aria-checked={!grid}
-          aria-label="Sidebar"
-          title="View as Sidebar (⌘1)"
+          aria-label={t("Sidebar")}
+          title={t("View as Sidebar")}
           onclick={() => launcher.setLayout("sidebar")}
         >
           <Icon name="sidebar" />
         </button>
-        <button role="radio" aria-checked={grid} aria-label="Grid" title="View as Grid (⌘2)" onclick={() => launcher.setLayout("grid")}>
+        <button role="radio" aria-checked={grid} aria-label={t("Grid")} title={t("View as Grid")} onclick={() => launcher.setLayout("grid")}>
           <Icon name="grid" />
         </button>
       </div>
       {#if showingDetail}
         <button
           class="icon-button"
-          aria-label="Game Log"
-          title="Game Log"
+          aria-label={t("Game Log")}
+          title={t("Game Log")}
           aria-pressed={launcher.logVisible}
           onclick={() => (launcher.logVisible = !launcher.logVisible)}
         >
@@ -196,8 +197,8 @@
       {#if updates.available}
         <button class="update-pill" onclick={() => updates.offer()} disabled={updates.progress !== null}>
           {updates.progress === null
-            ? `Update to ${updates.available.version}`
-            : `Updating ${Math.round(updates.progress * 100)}%`}
+            ? t("Update to {version}", { version: updates.available.version })
+            : t("Updating {percent} %", { percent: Math.round(updates.progress * 100) })}
         </button>
       {/if}
       {#if !hasMenuBar}
@@ -208,11 +209,11 @@
       <button
         class="account"
         aria-haspopup={launcher.accounts.length ? "menu" : "dialog"}
-        title={launcher.accounts.length ? "Switch Account" : "Sign In"}
+        title={launcher.accounts.length ? t("Switch Account") : t("Sign In")}
         onclick={showAccountMenu}
       >
         <Icon name="person" />
-        {launcher.account?.name ?? "Sign In"}
+        {launcher.account?.name ?? t("Sign In")}
         {#if launcher.accounts.length}
           <svg class="chevron" width="8" height="8" viewBox="0 0 8 8" aria-hidden="true">
             <path d="M1.5 3l2.5 2.5L6.5 3" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
@@ -236,11 +237,11 @@
     {:else}
       <div class="empty">
         <span class="logo"><CloverLogo size={56} /></span>
-        <h1>Welcome to Clover</h1>
-        <p class="secondary">Create an instance to pick a Minecraft version and start playing.</p>
+        <h1>{t("Welcome to Clover")}</h1>
+        <p class="secondary">{t("Create an instance to pick a Minecraft version and start playing.")}</p>
         <div class="empty-actions">
-          <button class="button" onclick={() => (launcher.importOpen = true)}>Import Modpack…</button>
-          <button class="button default" onclick={() => (launcher.newInstanceOpen = true)}>New Instance</button>
+          <button class="button" onclick={() => (launcher.importOpen = true)}>{t("Import Modpack…")}</button>
+          <button class="button default" onclick={() => (launcher.newInstanceOpen = true)}>{t("New Instance")}</button>
         </div>
       </div>
     {/if}

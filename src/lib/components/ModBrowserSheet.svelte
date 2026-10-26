@@ -6,6 +6,7 @@
   import { openUrl } from "@tauri-apps/plugin-opener";
   import { api, CONTENT, CURSEFORGE_KEY_FORM, errorText, type ModHit, type ModSource, type Place } from "$lib/api";
   import { launcher } from "$lib/launcher.svelte";
+  import { locale, t } from "$lib/i18n";
   import Icon from "./Icon.svelte";
 
   let dialog: HTMLDialogElement | undefined = $state();
@@ -22,7 +23,7 @@
   const instance = $derived(launcher.selected);
   const place = $derived(launcher.browse);
   const names = $derived(CONTENT[place?.kind ?? "mod"]);
-  const needsKey = $derived(source === "curseforge" && error?.includes("API key"));
+  const needsKey = $derived(source === "curseforge" && error?.includes(t("API key")));
 
   $effect(() => {
     if (launcher.browse) {
@@ -75,7 +76,7 @@
       const added = await api.installMod(instance.id, place, hit.source, hit.id);
       installs[key] = "installed";
       const extra = added.slice(1);
-      notice = extra.length ? `Also added ${extra.join(", ")}, which ${hit.title} needs.` : null;
+      notice = extra.length ? t("Also added {names}, which {name} needs.", { names: extra.join(", "), name: hit.title }) : null;
       launcher.modsRevision++;
       await markInstalled();
     } catch (e) {
@@ -84,7 +85,7 @@
     }
   }
 
-  const compact = new Intl.NumberFormat(undefined, { notation: "compact" });
+  const compact = new Intl.NumberFormat(locale, { notation: "compact" });
 </script>
 
 <dialog class="sheet browser" bind:this={dialog} aria-labelledby="mods-browser-title" onclose={() => (launcher.browse = null)}>
@@ -100,18 +101,18 @@
   </header>
 
   <div class="controls">
-    <div class="segmented" role="radiogroup" aria-label="Source">
+    <div class="segmented" role="radiogroup" aria-label={t("Source")}>
       <button role="radio" aria-checked={source === "modrinth"} onclick={() => (source = "modrinth")}>Modrinth</button>
       <button role="radio" aria-checked={source === "curseforge"} onclick={() => (source = "curseforge")}>CurseForge</button>
     </div>
     <label class="search">
       <Icon name="search" size={14} />
-      <span class="visually-hidden">Search {names.plural}</span>
+      <span class="visually-hidden">{t("Search {things}", { things: names.plural })}</span>
       <!-- svelte-ignore a11y_autofocus -->
       <input
         type="search"
         bind:value={query}
-        placeholder="Search {source === 'modrinth' ? 'Modrinth' : 'CurseForge'}"
+        placeholder={t("Search {site}", { site: source === "modrinth" ? "Modrinth" : "CurseForge" })}
         autocomplete="off"
         spellcheck="false"
         autofocus
@@ -124,12 +125,11 @@
       <div class="message">
         <p>{error}</p>
         <p class="secondary small">
-          CurseForge only serves launchers that have a key approved for third-party apps. Apply for one, then paste it
-          in Settings. Modrinth works without a key.
+          {t("CurseForge only serves launchers that have a key approved for third-party apps. Apply for one, then paste it in Settings. Modrinth works without a key.")}
         </p>
         <div class="message-actions">
-          <button class="button" onclick={() => openUrl(CURSEFORGE_KEY_FORM)}>Apply for a Key</button>
-          <button class="button default" onclick={() => api.openSettings()}>Open Settings</button>
+          <button class="button" onclick={() => openUrl(CURSEFORGE_KEY_FORM)}>{t("Apply for a Key")}</button>
+          <button class="button default" onclick={() => api.openSettings()}>{t("Open Settings")}</button>
         </div>
       </div>
     {:else if hits.length}
@@ -143,10 +143,10 @@
               <span class="no-icon" aria-hidden="true"></span>
             {/if}
             <div class="text">
-              <button class="title" onclick={() => openUrl(hit.pageUrl)} title="Open on {hit.source === 'modrinth' ? 'Modrinth' : 'CurseForge'}">
+              <button class="title" onclick={() => openUrl(hit.pageUrl)} title={t("Open on {site}", { site: hit.source === "modrinth" ? "Modrinth" : "CurseForge" })}>
                 {hit.title}
               </button>
-              <span class="secondary byline">by {hit.author} · {compact.format(hit.downloads)} downloads</span>
+              <span class="secondary byline">{t("by {author} · {downloads} downloads", { author: hit.author, downloads: compact.format(hit.downloads) })}</span>
               <span class="description">{hit.description}</span>
             </div>
             <button
@@ -155,21 +155,23 @@
               disabled={!!state}
               onclick={() => install(hit)}
             >
-              {state === "installing" ? "Installing…" : state === "installed" ? "Installed" : "Install"}
+              {state === "installing" ? t("Installing…") : state === "installed" ? t("Installed") : t("Install")}
             </button>
           </li>
         {/each}
       </ul>
       {#if hits.length < total}
         <button class="button more" disabled={loading} onclick={() => instance && place && run(instance.id, place, source, query, hits.length)}>
-          {loading ? "Loading…" : "Show More"}
+          {loading ? t("Loading…") : t("Show More")}
         </button>
       {/if}
     {:else if loading}
-      <p class="message secondary">Searching…</p>
+      <p class="message secondary">{t("Searching…")}</p>
     {:else if !error}
       <p class="message secondary">
-        No {names.plural} match{query ? ` “${query}”` : ""} for this {place?.kind === "mod" ? "version and loader" : "version"}.
+        {query
+          ? t(place?.kind === "mod" ? "No {things} match “{query}” for this version and loader." : "No {things} match “{query}” for this version.", { things: names.plural, query })
+          : t(place?.kind === "mod" ? "No {things} for this version and loader." : "No {things} for this version.", { things: names.plural })}
       </p>
     {/if}
   </div>
@@ -178,7 +180,7 @@
     <p class="status" role="status" aria-live="polite">
       {#if error && !needsKey}<span class="error">{error}</span>{:else if notice}<span class="secondary">{notice}</span>{/if}
     </p>
-    <button class="button default" onclick={() => (launcher.browse = null)}>Done</button>
+    <button class="button default" onclick={() => (launcher.browse = null)}>{t("Done")}</button>
   </div>
 </dialog>
 

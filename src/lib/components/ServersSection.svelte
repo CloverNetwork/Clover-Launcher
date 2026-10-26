@@ -8,6 +8,7 @@
   import { launcher } from "$lib/launcher.svelte";
   import BlockIcon from "./BlockIcon.svelte";
   import Icon from "./Icon.svelte";
+  import { locale, t } from "$lib/i18n";
 
   let { instance }: { instance: Instance } = $props();
 
@@ -81,31 +82,31 @@
     e.preventDefault();
     const menu = await Menu.new({
       items: [
-        { id: "join", text: "Join", enabled: !busy, action: () => launcher.play(instance.id, { type: "server", address: server.address }) },
-        { id: "refresh", text: "Refresh", action: () => ping(server.address) },
+        { id: "join", text: t("Join"), enabled: !busy, action: () => launcher.play(instance.id, { type: "server", address: server.address }) },
+        { id: "refresh", text: t("Refresh"), action: () => ping(server.address) },
         { item: "Separator" },
-        { id: "edit", text: "Edit…", action: () => (editing = { index, name: server.name, address: server.address }) },
-        { id: "copy", text: "Copy Address", action: () => navigator.clipboard.writeText(server.address) },
+        { id: "edit", text: t("Edit…"), action: () => (editing = { index, name: server.name, address: server.address }) },
+        { id: "copy", text: t("Copy Address"), action: () => navigator.clipboard.writeText(server.address) },
         { item: "Separator" },
-        { id: "remove", text: "Remove", action: () => remove(index) },
+        { id: "remove", text: t("Remove"), action: () => remove(index) },
       ],
     });
     await menu.popup();
   }
 
-  const count = (n: number) => n.toLocaleString();
+  const count = (n: number) => n.toLocaleString(locale);
 </script>
 
 <section class="servers" aria-labelledby="servers-title">
   <header>
-    <h2 id="servers-title">Servers</h2>
+    <h2 id="servers-title">{t("Servers")}</h2>
     <div class="spacer"></div>
     {#if servers.length}
-      <button class="icon-button" aria-label="Refresh All" title="Refresh All" onclick={() => pingAll(servers)}>
+      <button class="icon-button" aria-label={t("Refresh All")} title={t("Refresh All")} onclick={() => pingAll(servers)}>
         <Icon name="refresh" size={14} />
       </button>
     {/if}
-    <button class="button" onclick={() => (editing = { index: null, name: "", address: "" })}>Add Server…</button>
+    <button class="button" onclick={() => (editing = { index: null, name: "", address: "" })}>{t("Add Server…")}</button>
   </header>
 
   {#if error}
@@ -128,37 +129,37 @@
             {#if typeof status === "object"}
               <span class="secondary detail" title={status.motd}>{status.motd || server.address}</span>
               <span class="secondary detail meta">
-                {count(status.online)} of {count(status.max)} playing · {status.latencyMs} ms{status.version ? ` · ${status.version}` : ""}
+                {t("{online} of {max} playing", { online: count(status.online), max: count(status.max) })} · {status.latencyMs} ms{status.version ? ` · ${status.version}` : ""}
               </span>
             {:else}
               <span class="secondary detail">{server.address}</span>
-              <span class="secondary detail meta">{status === "pinging" ? "Checking…" : (status ?? "")}</span>
+              <span class="secondary detail meta">{status === "pinging" ? t("Checking…") : (status ?? "")}</span>
             {/if}
           </div>
           <button
             class="button small"
             disabled={busy}
-            onclick={() => launcher.play(instance.id, { type: "server", address: server.address })}>Join</button
+            onclick={() => launcher.play(instance.id, { type: "server", address: server.address })}>{t("Join")}</button
           >
-          <button class="icon-button" aria-label="More for {server.name}" title="More" onclick={(e) => showMenu(e, server, index)}>
+          <button class="icon-button" aria-label={t("More for {name}", { name: server.name })} title={t("More")} onclick={(e) => showMenu(e, server, index)}>
             <Icon name="more" />
           </button>
         </li>
       {/each}
     </ul>
   {:else if loaded}
-    <p class="empty secondary">No servers yet. Add one here or in the game's Multiplayer screen.</p>
+    <p class="empty secondary">{t("No servers yet. Add one here or in the game's Multiplayer screen.")}</p>
   {/if}
 </section>
 
 <dialog class="sheet" bind:this={dialog} aria-labelledby="server-title" onclose={() => (editing = null)}>
   {#if editing}
     <form onsubmit={save}>
-      <h2 id="server-title">{editing.index === null ? "Add Server" : "Edit Server"}</h2>
+      <h2 id="server-title">{editing.index === null ? t("Add Server") : t("Edit Server")}</h2>
       <div class="grid">
-        <label for="server-name">Name</label>
-        <input id="server-name" class="field" bind:value={editing.name} placeholder="Minecraft Server" autocomplete="off" />
-        <label for="server-address">Address</label>
+        <label for="server-name">{t("Name")}</label>
+        <input id="server-name" class="field" bind:value={editing.name} placeholder={t("Minecraft Server")} autocomplete="off" />
+        <label for="server-address">{t("Address")}</label>
         <!-- svelte-ignore a11y_autofocus -->
         <input
           id="server-address"
@@ -176,9 +177,9 @@
         <p class="error" role="alert">{saveError}</p>
       {/if}
       <div class="actions">
-        <button type="button" class="button" onclick={() => (editing = null)}>Cancel</button>
+        <button type="button" class="button" onclick={() => (editing = null)}>{t("Cancel")}</button>
         <button type="submit" class="button default" disabled={!editing.address.trim()}>
-          {editing.index === null ? "Add" : "Save"}
+          {editing.index === null ? t("Add") : t("Save")}
         </button>
       </div>
     </form>

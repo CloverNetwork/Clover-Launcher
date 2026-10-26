@@ -8,6 +8,7 @@
   import { launcher } from "$lib/launcher.svelte";
   import BlockIcon from "./BlockIcon.svelte";
   import Icon from "./Icon.svelte";
+  import { t } from "$lib/i18n";
 
   let { instance, place, subtitle }: { instance: Instance; place: Place; subtitle?: string } = $props();
 
@@ -65,8 +66,8 @@
       const changed = await api.updateMods(instance.id, place, list);
       const extra = changed.filter((title) => !list.some((u) => u.title === title));
       status =
-        `Updated ${list.length === 1 ? list[0].title : `${list.length} ${names.plural}`}.` +
-        (extra.length ? ` Also added ${extra.join(", ")}, which the new versions need.` : "");
+        t("Updated {what}.", { what: list.length === 1 ? list[0].title : `${list.length} ${names.plural}` }) +
+        (extra.length ? " " + t("Also added {names}, which the new versions need.", { names: extra.join(", ") }) : "");
       launcher.modsRevision++;
     } catch (e) {
       error = errorText(e);
@@ -83,9 +84,14 @@
     try {
       const { added, unavailable } = await api.installPerformanceMods(instance.id);
       status = added.length
-        ? `Added ${added.join(", ")}.`
-        : "The performance mods that work with this version are already installed.";
-      if (unavailable) status += ` ${unavailable} more ${unavailable === 1 ? "isn't" : "aren't"} available for this version yet.`;
+        ? t("Added {names}.", { names: added.join(", ") })
+        : t("The performance mods that work with this version are already installed.");
+      if (unavailable)
+        status +=
+          " " +
+          (unavailable === 1
+            ? t("1 more isn't available for this version yet.")
+            : t("{n} more aren't available for this version yet.", { n: unavailable }));
       launcher.modsRevision++;
     } catch (e) {
       error = errorText(e);
@@ -120,18 +126,18 @@
     const menu = await Menu.new({
       items: [
         ...(update
-          ? [{ id: "update", text: `Update to ${update.newVersion}`, enabled: !running, action: () => applyUpdates([update]) }]
+          ? [{ id: "update", text: t("Update to {version}", { version: update.newVersion }), enabled: !running, action: () => applyUpdates([update]) }]
           : []),
-        { id: "toggle", text: mod.enabled ? "Turn Off" : "Turn On", action: () => toggle(mod) },
+        { id: "toggle", text: mod.enabled ? t("Turn Off") : t("Turn On"), action: () => toggle(mod) },
         { item: "Separator" },
-        { id: "remove", text: "Remove", action: () => remove(mod) },
+        { id: "remove", text: t("Remove"), action: () => remove(mod) },
       ],
     });
     await menu.popup();
   }
 
   const sourceName = (mod: InstalledMod) =>
-    mod.source === "modrinth" ? "Modrinth" : mod.source === "curseforge" ? "CurseForge" : "Added by hand";
+    mod.source === "modrinth" ? "Modrinth" : mod.source === "curseforge" ? "CurseForge" : t("Added by hand");
 </script>
 
 <section class="mods" aria-labelledby={titleId}>
@@ -141,39 +147,39 @@
       {#if subtitle}<p class="secondary subtitle">{subtitle}</p>{/if}
     </div>
     {#if mods.length}
-      <span class="secondary count">{enabledCount} of {mods.length} on</span>
+      <span class="secondary count">{t("{on} of {total} on", { on: enabledCount, total: mods.length })}</span>
     {/if}
     <div class="spacer"></div>
     {#if updates.length}
       <button class="button" disabled={running || updating.size > 0} onclick={() => applyUpdates(updates)}>
-        {updating.size > 1 ? "Updating…" : `Update All (${updates.length})`}
+        {updating.size > 1 ? t("Updating…") : t("Update All ({n})", { n: updates.length })}
       </button>
     {:else if mods.length}
-      <button class="icon-button" aria-label="Check for Updates" title="Check for Updates" disabled={checking} onclick={() => checkUpdates(instance.id, place)}>
+      <button class="icon-button" aria-label={t("Check for Updates")} title={t("Check for Updates")} disabled={checking} onclick={() => checkUpdates(instance.id, place)}>
         <Icon name="refresh" size={14} />
       </button>
     {/if}
-    <button class="icon-button" aria-label="Show {names.title} Folder" title="Show {names.title} Folder" onclick={() => api.showModsFolder(instance.id, place)}>
+    <button class="icon-button" aria-label={t("Show {title} Folder", { title: names.title })} title={t("Show {title} Folder", { title: names.title })} onclick={() => api.showModsFolder(instance.id, place)}>
       <Icon name="folder" />
     </button>
     {#if isMods}
       <button
         class="button"
         disabled={addingPack || running}
-        title="Sodium, Lithium, FerriteCore and other mods that make the game faster without changing it"
+        title={t("Sodium, Lithium, FerriteCore and other mods that make the game faster without changing it")}
         onclick={addPerformanceMods}
       >
-        {addingPack ? "Adding…" : "Add Performance Mods"}
+        {addingPack ? t("Adding…") : t("Add Performance Mods")}
       </button>
     {/if}
-    <button class="button" onclick={() => (launcher.browse = { ...place })}>Add {names.title}…</button>
+    <button class="button" onclick={() => (launcher.browse = { ...place })}>{t("Add {title}…", { title: names.title })}</button>
   </header>
 
   {#if running && mods.length}
-    <p class="note secondary">Changes take effect the next time you play. Quit the game to update mods.</p>
+    <p class="note secondary">{t("Changes take effect the next time you play. Quit the game to update mods.")}</p>
   {/if}
   {#if checking || status}
-    <p class="note secondary" role="status">{checking ? "Checking for updates…" : status}</p>
+    <p class="note secondary" role="status">{checking ? t("Checking for updates…") : status}</p>
   {/if}
   {#if error}
     <p class="error" role="alert">{error}</p>
@@ -197,31 +203,31 @@
               {:else}
                 {mod.version ?? mod.file}
               {/if}
-              · {sourceName(mod)}{mod.dependency ? " · Required by another mod" : ""}
+              · {sourceName(mod)}{mod.dependency ? ` · ${t("Required by another mod")}` : ""}
             </span>
           </div>
           {#if update}
             <button
               class="button update"
               disabled={running || updating.has(mod.file)}
-              title="Update to {update.newVersion}"
+              title={t("Update to {version}", { version: update.newVersion })}
               onclick={() => applyUpdates([update])}
             >
-              {updating.has(mod.file) ? "Updating…" : "Update"}
+              {updating.has(mod.file) ? t("Updating…") : t("Update")}
             </button>
           {/if}
-          <label class="switch" title={mod.enabled ? "Turn Off" : "Turn On"}>
-            <input type="checkbox" role="switch" checked={mod.enabled} onchange={() => toggle(mod)} aria-label="{mod.title} on" />
+          <label class="switch" title={mod.enabled ? t("Turn Off") : t("Turn On")}>
+            <input type="checkbox" role="switch" checked={mod.enabled} onchange={() => toggle(mod)} aria-label={t("{name} on", { name: mod.title })} />
             <span aria-hidden="true"></span>
           </label>
-          <button class="icon-button remove" aria-label="Remove {mod.title}" title="Remove" onclick={() => remove(mod)}>
+          <button class="icon-button remove" aria-label={t("Remove {name}", { name: mod.title })} title={t("Remove")} onclick={() => remove(mod)}>
             <Icon name="trash" size={14} />
           </button>
         </li>
       {/each}
     </ul>
   {:else}
-    <p class="empty secondary">No {names.plural} yet. Add some from Modrinth or CurseForge, or drop files in the folder.</p>
+    <p class="empty secondary">{t("No {things} yet. Add some from Modrinth or CurseForge, or drop files in the folder.", { things: names.plural })}</p>
   {/if}
 </section>
 

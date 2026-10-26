@@ -68,7 +68,7 @@ pub fn open_log_window(app: &AppHandle, instance_id: &str, name: &str) -> tauri:
         return window.set_focus();
     }
     WebviewWindowBuilder::new(app, label, WebviewUrl::App(format!("log/{instance_id}").into()))
-        .title(format!("{name} — Game Log"))
+        .title(format!("{name} — {}", crate::i18n::tr("Game Log")))
         .inner_size(760.0, 480.0)
         .min_inner_size(420.0, 240.0)
         .decorations(crate::chrome::decorated())

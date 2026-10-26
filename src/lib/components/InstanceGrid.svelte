@@ -6,27 +6,28 @@
   import { launcher } from "$lib/launcher.svelte";
   import BlockIcon from "./BlockIcon.svelte";
   import Icon from "./Icon.svelte";
+  import { t } from "$lib/i18n";
 
   function status(id: string) {
     const activity = launcher.activity[id];
     const progress = launcher.progress[id];
-    if (activity === "running") return "Playing";
-    if (activity === "verifying") return "Verifying…";
+    if (activity === "running") return t("Playing");
+    if (activity === "verifying") return t("Verifying…");
     if (activity === "launching" && progress && progress.total > 0 && progress.done < progress.total)
-      return `Downloading ${Math.round((progress.done / progress.total) * 100)}%`;
-    if (activity === "launching") return "Starting…";
+      return t("Downloading {percent} %", { percent: Math.round((progress.done / progress.total) * 100) });
+    if (activity === "launching") return t("Starting…");
     return null;
   }
 </script>
 
 <section class="grid-page" aria-labelledby="grid-title">
   <header>
-    <h1 id="grid-title">Instances</h1>
+    <h1 id="grid-title">{t("Instances")}</h1>
     {#if launcher.instances.length > 1}
       <label class="search">
         <Icon name="search" size={12} />
-        <span class="visually-hidden">Search instances</span>
-        <input type="search" bind:value={launcher.query} placeholder="Search" autocomplete="off" spellcheck="false" />
+        <span class="visually-hidden">{t("Search instances")}</span>
+        <input type="search" bind:value={launcher.query} placeholder={t("Search")} autocomplete="off" spellcheck="false" />
       </label>
     {/if}
   </header>
@@ -55,11 +56,11 @@
         </button>
         {#if activity === "running"}
           <button class="play stop" onclick={() => launcher.stop(instance.id)}>
-            <Icon name="stop" size={10} /> Stop
+            <Icon name="stop" size={10} /> {t("Stop")}
           </button>
         {:else}
           <button class="play" disabled={!!activity} onclick={() => launcher.play(instance.id)}>
-            <Icon name="play" size={10} /> Play
+            <Icon name="play" size={10} /> {t("Play")}
           </button>
         {/if}
       </li>
@@ -68,9 +69,9 @@
     <li class="card add">
       <button class="open" onclick={() => (launcher.newInstanceOpen = true)}>
         <span class="plus"><Icon name="plus" size={28} /></span>
-        <span class="name">New Instance</span>
+        <span class="name">{t("New Instance")}</span>
       </button>
-      <button class="import-link" onclick={() => (launcher.importOpen = true)}>Import Modpack…</button>
+      <button class="import-link" onclick={() => (launcher.importOpen = true)}>{t("Import Modpack…")}</button>
     </li>
     {/if}
   </ul>

@@ -4,6 +4,7 @@
   import { Menu } from "@tauri-apps/api/menu";
   import { api, errorText, type Instance, type Screenshot } from "$lib/api";
   import { launcher } from "$lib/launcher.svelte";
+  import { locale, t } from "$lib/i18n";
   import { DELETE_INSTANCE, SHOW_FOLDER } from "$lib/platform";
 
   let { instance }: { instance: Instance } = $props();
@@ -28,7 +29,7 @@
       .catch((e) => (error = errorText(e)));
   });
 
-  const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
+  const dateFormat = new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" });
 
   async function open(shot: Screenshot, reveal = false) {
     error = null;
@@ -53,7 +54,7 @@
     e.preventDefault();
     const menu = await Menu.new({
       items: [
-        { id: "open", text: "Open", action: () => open(shot) },
+        { id: "open", text: t("Open"), action: () => open(shot) },
         { id: "show", text: SHOW_FOLDER, action: () => open(shot, true) },
         { item: "Separator" },
         { id: "trash", text: DELETE_INSTANCE, action: () => trash(shot) },
@@ -65,9 +66,9 @@
 
 <section class="screenshots" aria-labelledby="screenshots-title">
   <header>
-    <h2 id="screenshots-title">Screenshots</h2>
+    <h2 id="screenshots-title">{t("Screenshots")}</h2>
     {#if shots.length}
-      <span class="secondary count">{shots.length.toLocaleString()}</span>
+      <span class="secondary count">{shots.length.toLocaleString(locale)}</span>
     {/if}
   </header>
 
@@ -82,7 +83,7 @@
           <button
             class="shot"
             title="{shot.file} · {dateFormat.format(shot.taken * 1000)}"
-            aria-label="Screenshot from {dateFormat.format(shot.taken * 1000)}"
+            aria-label={t("Screenshot from {date}", { date: dateFormat.format(shot.taken * 1000) })}
             onclick={() => open(shot)}
             oncontextmenu={(e) => showMenu(e, shot)}
           >
@@ -92,10 +93,10 @@
       {/each}
     </ul>
     {#if shots.length > shown}
-      <button class="button more" onclick={() => (shown += 48)}>Show More</button>
+      <button class="button more" onclick={() => (shown += 48)}>{t("Show More")}</button>
     {/if}
   {:else if loaded}
-    <p class="empty secondary">No screenshots yet. Press F2 in the game to take one.</p>
+    <p class="empty secondary">{t("No screenshots yet. Press F2 in the game to take one.")}</p>
   {/if}
 </section>
 

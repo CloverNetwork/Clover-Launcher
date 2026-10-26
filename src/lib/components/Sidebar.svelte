@@ -3,6 +3,7 @@
   import { launcher, type Sort } from "$lib/launcher.svelte";
   import BlockIcon from "./BlockIcon.svelte";
   import Icon from "./Icon.svelte";
+  import { t } from "$lib/i18n";
 
   let list: HTMLUListElement | undefined = $state();
 
@@ -11,7 +12,7 @@
   async function showSortMenu() {
     const option = (sort: Sort, text: string) =>
       CheckMenuItem.new({ text, checked: launcher.sort === sort, action: () => launcher.setSort(sort) });
-    const menu = await Menu.new({ items: [await option("name", "Name"), await option("recent", "Last Played")] });
+    const menu = await Menu.new({ items: [await option("name", t("Name")), await option("recent", t("Last Played"))] });
     await menu.popup();
   }
 
@@ -27,12 +28,12 @@
 
 </script>
 
-<nav class="sidebar" aria-label="Instances">
+<nav class="sidebar" aria-label={t("Instances")}>
   <div class="titlebar" data-tauri-drag-region>
     <button
       class="icon-button"
-      aria-label="Hide Sidebar"
-      title="Hide Sidebar"
+      aria-label={t("Hide Sidebar")}
+      title={t("Hide Sidebar")}
       onclick={() => (launcher.sidebarVisible = false)}
     >
       <Icon name="sidebar" />
@@ -42,20 +43,20 @@
   {#if launcher.instances.length > 1}
     <label class="search">
       <Icon name="search" size={12} />
-      <span class="visually-hidden">Search instances</span>
-      <input type="search" bind:value={launcher.query} placeholder="Search" autocomplete="off" spellcheck="false" />
+      <span class="visually-hidden">{t("Search instances")}</span>
+      <input type="search" bind:value={launcher.query} placeholder={t("Search")} autocomplete="off" spellcheck="false" />
     </label>
   {/if}
 
   <div class="section-header">
-    <h2 id="instances-heading">Instances</h2>
-    <button class="icon-button small" aria-label="Sort By" title="Sort By" onclick={showSortMenu}>
+    <h2 id="instances-heading">{t("Instances")}</h2>
+    <button class="icon-button small" aria-label={t("Sort By")} title={t("Sort By")} onclick={showSortMenu}>
       <Icon name="sort" size={14} />
     </button>
     <button
       class="icon-button small"
-      aria-label="New Instance"
-      title="New Instance"
+      aria-label={t("New Instance")}
+      title={t("New Instance")}
       onclick={() => (launcher.newInstanceOpen = true)}
     >
       <Icon name="plus" size={14} />
@@ -91,7 +92,7 @@
           <BlockIcon seed={instance.id} size={18} />
           <span class="name">{instance.name}</span>
           {#if activity === "running"}
-            <span class="status" title="Playing"><Icon name="play" size={10} /><span class="visually-hidden">Playing</span></span>
+            <span class="status" title={t("Playing")}><Icon name="play" size={10} /><span class="visually-hidden">{t("Playing")}</span></span>
           {:else}
             <span class="version">{instance.version}</span>
           {/if}
@@ -99,11 +100,11 @@
         {/each}
       {/each}
       {#if !visible.length}
-        <li class="group" role="presentation">No matches</li>
+        <li class="group" role="presentation">{t("No matches")}</li>
       {/if}
     </ul>
   {:else}
-    <p class="empty secondary">No instances</p>
+    <p class="empty secondary">{t("No instances")}</p>
   {/if}
 </nav>
 

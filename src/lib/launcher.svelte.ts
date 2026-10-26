@@ -1,6 +1,7 @@
 import { Menu } from "@tauri-apps/api/menu";
 import { ask, message, save } from "@tauri-apps/plugin-dialog";
 import { DELETE_INSTANCE, SHORTCUT_LABEL, SHOW_FOLDER, TRASH } from "./platform";
+import { locale, t } from "./i18n";
 import { notifyIfAway } from "./notify";
 import { api, errorText, events, type Accounts, type Instance, type LoaderSource, type CrashFinding, type Place, type QuickPlay, type Profile, type World } from "./api";
 
@@ -142,7 +143,7 @@ class Launcher {
         // Play time was just added.
         api.getInstance(instanceId).then((i) => this.replace(i), () => {});
         if (code !== null && code !== 0) {
-          this.error = { instanceId, message: `Minecraft quit unexpectedly (exit code ${code}). The game log has details.` };
+          this.error = { instanceId, message: t("Minecraft quit unexpectedly (exit code {code}). The game log has details.", { code }) };
           this.logVisible = true;
           this.explainCrash(instanceId);
         }
@@ -167,8 +168,8 @@ class Launcher {
 
   /** "Vanilla", "Fabric 0.20.1", "Forge 54.1.0", or "Custom Profile". */
   loaderLabel(instance: Instance) {
-    if (instance.loader === "vanilla") return "Vanilla";
-    if (instance.loader === "custom") return "Custom Profile";
+    if (instance.loader === "vanilla") return t("Vanilla");
+    if (instance.loader === "custom") return t("Custom Profile");
     const name = this.loaders.find((l) => l.id === instance.loader)?.name ?? instance.loader;
     const version = instance.loaderVersion?.replace(`${instance.version}-`, "") ?? "";
     return `${name} ${version}`.trim();
@@ -188,8 +189,8 @@ class Launcher {
   async launchFromOutside(id: string) {
     if (!this.instances.some((i) => i.id === id)) await this.reload();
     if (!this.instances.some((i) => i.id === id)) {
-      await message("The shortcut points to an instance that no longer exists. You can delete the shortcut.", {
-        title: "Instance Not Found",
+      await message(t("The shortcut points to an instance that no longer exists. You can delete the shortcut."), {
+        title: t("Instance Not Found"),
         kind: "warning",
       });
       return;
@@ -202,7 +203,7 @@ class Launcher {
     if (!id) return;
     try {
       const place = await api.createShortcut(id);
-      this.notice = { instanceId: id, message: `Added a shortcut: ${place}` };
+      this.notice = { instanceId: id, message: t("Added a shortcut: {place}", { place }) };
     } catch (e) {
       this.error = { instanceId: id, message: errorText(e) };
     }
@@ -213,7 +214,7 @@ class Launcher {
     if (!id) return;
     try {
       await navigator.clipboard.writeText(await api.launchCommand(id));
-      this.notice = { instanceId: id, message: "Copied the launch command." };
+      this.notice = { instanceId: id, message: t("Copied the launch command.") };
     } catch (e) {
       this.error = { instanceId: id, message: errorText(e) };
     }
@@ -233,18 +234,18 @@ class Launcher {
     const menu = await Menu.new({
       items: [
         running
-          ? { id: "stop", text: "Stop", action: () => this.stop(id) }
-          : { id: "play", text: "Play", enabled: !this.activity[id], action: () => this.play(id) },
+          ? { id: "stop", text: t("Stop"), action: () => this.stop(id) }
+          : { id: "play", text: t("Play"), enabled: !this.activity[id], action: () => this.play(id) },
         { item: "Separator" },
         { id: "show", text: SHOW_FOLDER, action: () => this.showFolder(id) },
-        { id: "verify", text: "Verify Game Files", enabled: !this.activity[id], action: () => this.verify(id) },
+        { id: "verify", text: t("Verify Game Files"), enabled: !this.activity[id], action: () => this.verify(id) },
         { item: "Separator" },
-        { id: "edit", text: "Edit Instance…", enabled: !running, action: () => this.edit(id) },
-        { id: "duplicate", text: "Duplicate", action: () => this.duplicate(id) },
-        { id: "export", text: "Export as Modpack…", enabled: !this.activity[id], action: () => this.exportPack(id) },
+        { id: "edit", text: t("Edit Instance…"), enabled: !running, action: () => this.edit(id) },
+        { id: "duplicate", text: t("Duplicate"), action: () => this.duplicate(id) },
+        { id: "export", text: t("Export as Modpack…"), enabled: !this.activity[id], action: () => this.exportPack(id) },
         { item: "Separator" },
         { id: "shortcut", text: SHORTCUT_LABEL, action: () => this.createShortcut(id) },
-        { id: "command", text: "Copy Launch Command", action: () => this.copyLaunchCommand(id) },
+        { id: "command", text: t("Copy Launch Command"), action: () => this.copyLaunchCommand(id) },
         { item: "Separator" },
         { id: "delete", text: DELETE_INSTANCE, enabled: !running, action: () => this.remove(id) },
       ],
@@ -281,7 +282,7 @@ class Launcher {
       const findings = await api.analyzeCrash(instanceId);
       if (findings.length && this.error?.instanceId === instanceId) {
         this.crash = { instanceId, findings, done: {} };
-        this.error = { instanceId, message: "Minecraft quit unexpectedly." };
+        this.error = { instanceId, message: t("Minecraft quit unexpectedly.") };
       }
     } catch {
       // The plain error and the log are still there.
@@ -296,13 +297,11 @@ class Launcher {
       this.edit(crash.instanceId);
       return;
     }
-    crash.done[index] = "Working…";
+    crash.done[index] = t("Working…");
     try {
       this.replace(await api.applyCrashFix(crash.instanceId, fix));
       this.modsRevision++;
-      crash.done[index] = { installMod: "Installed", turnOffMod: "Turned off", setMemory: "Changed", automaticJava: "Changed" }[
-        fix.type
-      ];
+      crash.done[index] = t({ installMod: "Installed", turnOffMod: "Turned Off", setMemory: "Changed", automaticJava: "Changed" }[fix.type]);
     } catch (e) {
       delete crash.done[index];
       this.error = { instanceId: crash.instanceId, message: errorText(e) };
@@ -326,7 +325,7 @@ class Launcher {
       this.replace(instance);
       this.activity[id] = "running";
       // A first launch can download for minutes; say when the game is finally starting.
-      if (this.downloaded.delete(id)) notifyIfAway("Minecraft Is Starting", instance.name);
+      if (this.downloaded.delete(id)) notifyIfAway(t("Minecraft Is Starting"), instance.name);
     } catch (e) {
       delete this.activity[id];
       this.error = { instanceId: id, message: errorText(e) };
@@ -350,8 +349,8 @@ class Launcher {
     const instance = this.instances.find((i) => i.id === id);
     if (!instance) return;
     const confirmed = await ask(
-      `Its worlds, screenshots and settings go to the ${TRASH}, where you can restore them until it's emptied.`,
-      { title: `Move “${instance.name}” to the ${TRASH}?`, kind: "warning", okLabel: DELETE_INSTANCE, cancelLabel: "Cancel" },
+      t("Its worlds, screenshots and settings go to the {trash}, where you can restore them until it's emptied.", { trash: TRASH }),
+      { title: t("Move “{name}” to the {trash}?", { name: instance.name, trash: TRASH }), kind: "warning", okLabel: DELETE_INSTANCE, cancelLabel: t("Cancel") },
     );
     if (!confirmed) return;
     try {
@@ -372,22 +371,22 @@ class Launcher {
     const instance = this.instances.find((i) => i.id === id);
     if (!instance) return;
     const path = await save({
-      title: "Export as Modpack",
+      title: t("Export as Modpack"),
       defaultPath: `${instance.name.replace(/[\\/:*?"<>|]/g, "-")}.mrpack`,
-      filters: [{ name: "Modrinth Modpack", extensions: ["mrpack"] }],
+      filters: [{ name: t("Modrinth Modpack"), extensions: ["mrpack"] }],
     });
     if (!path) return;
-    this.notice = { instanceId: instance.id, message: "Exporting…" };
+    this.notice = { instanceId: instance.id, message: t("Exporting…") };
     try {
       const { linked, included } = await api.exportModpack(instance.id, path);
-      const count = (n: number) => `${n} ${n === 1 ? "file" : "files"}`;
+      const count = (n: number) => (n === 1 ? t("1 file") : t("{n} files", { n }));
       this.notice = {
         instanceId: instance.id,
-        message: `Exported. ${count(linked)} download from Modrinth; ${count(included)} packed in.`,
+        message: t("Exported. {linked} download from Modrinth; {included} packed in.", { linked: count(linked), included: count(included) }),
       };
     } catch (e) {
       this.notice = null;
-      this.error = { instanceId: instance.id, message: `Couldn't export: ${errorText(e)}` };
+      this.error = { instanceId: instance.id, message: t("Couldn't export: {error}", { error: errorText(e) }) };
     }
   }
 
@@ -401,8 +400,10 @@ class Launcher {
       const [instance, replaced] = await api.verifyInstance(id);
       this.replace(instance);
       const message = replaced
-        ? `Replaced ${replaced.toLocaleString()} missing or damaged ${replaced === 1 ? "file" : "files"}.`
-        : "All game files are intact.";
+        ? replaced === 1
+          ? t("Replaced 1 missing or damaged file.")
+          : t("Replaced {n} missing or damaged files.", { n: replaced.toLocaleString(locale) })
+        : t("All game files are intact.");
       this.notice = { instanceId: id, message };
     } catch (e) {
       this.error = { instanceId: id, message: errorText(e) };

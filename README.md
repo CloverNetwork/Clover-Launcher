@@ -12,6 +12,7 @@ A Minecraft: Java Edition launcher built with Tauri, Rust and Svelte.
 - Crash help that spots missing mods, the wrong Java and memory problems
 - Discord status while playing
 - One-click performance mods (Sodium, Lithium, FerriteCore and more)
+- English and German
 - Multiple Microsoft accounts
 - Skins and capes
 

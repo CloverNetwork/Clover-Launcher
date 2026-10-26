@@ -7,6 +7,7 @@ import { ask, message } from "@tauri-apps/plugin-dialog";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import { errorText } from "./api";
+import { t } from "./i18n";
 
 class Updates {
   available = $state<Update | null>(null);
@@ -20,10 +21,10 @@ class Updates {
       this.available = await check();
       if (this.available && manual) await this.offer();
       else if (!this.available && manual) {
-        await message(`Clover ${await getVersion()} is the newest version.`, { title: "You're Up to Date" });
+        await message(t("Clover {version} is the newest version.", { version: await getVersion() }), { title: t("You're Up to Date") });
       }
     } catch (e) {
-      if (manual) await message(`Clover couldn't check for updates: ${errorText(e)}`, { title: "Update Check Failed", kind: "warning" });
+      if (manual) await message(t("Clover couldn't check for updates: {error}", { error: errorText(e) }), { title: t("Update Check Failed"), kind: "warning" });
     }
   }
 
@@ -32,10 +33,10 @@ class Updates {
     const update = this.available;
     if (!update) return;
     const notes = update.body?.trim() ? `\n\n${update.body.trim()}` : "";
-    const go = await ask(`Clover ${update.version} is available. You have ${update.currentVersion}.${notes}`, {
-      title: "Update Clover?",
-      okLabel: "Update and Restart",
-      cancelLabel: "Later",
+    const go = await ask(t("Clover {version} is available. You have {current}.", { version: update.version, current: update.currentVersion }) + notes, {
+      title: t("Update Clover?"),
+      okLabel: t("Update and Restart"),
+      cancelLabel: t("Later"),
     });
     if (go) await this.install();
   }
@@ -57,7 +58,7 @@ class Updates {
       await relaunch();
     } catch (e) {
       this.progress = null;
-      await message(`The update didn't install: ${errorText(e)}`, { title: "Update Failed", kind: "warning" });
+      await message(t("The update didn't install: {error}", { error: errorText(e) }), { title: t("Update Failed"), kind: "warning" });
     }
   }
 }

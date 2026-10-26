@@ -6,6 +6,7 @@
   import { api, errorText, type InstanceOptions } from "$lib/api";
   import { launcher } from "$lib/launcher.svelte";
   import VersionPicker from "./VersionPicker.svelte";
+  import { locale, t } from "$lib/i18n";
 
   type Window = "default" | "size" | "fullscreen";
 
@@ -89,21 +90,21 @@
     }
   }
 
-  const gigabytes = (mb: number) => `${(mb / 1024).toLocaleString(undefined, { maximumFractionDigits: 1 })} GB`;
+  const gigabytes = (mb: number) => `${(mb / 1024).toLocaleString(locale, { maximumFractionDigits: 1 })} GB`;
 </script>
 
 <dialog class="sheet edit" bind:this={dialog} aria-labelledby="edit-title" onclose={() => (launcher.editOpen = false)}>
   <form onsubmit={save}>
-    <h2 id="edit-title">Edit Instance</h2>
+    <h2 id="edit-title">{t("Edit Instance")}</h2>
 
     <div class="scroll">
-      <h3>General</h3>
+      <h3>{t("General")}</h3>
       <div class="grid">
-        <label for="edit-name">Name</label>
+        <label for="edit-name">{t("Name")}</label>
         <input id="edit-name" class="field" bind:value={name} autocomplete="off" spellcheck="false" required />
-        <label for="edit-group">Group</label>
+        <label for="edit-group">{t("Group")}</label>
         <div>
-          <input id="edit-group" class="field" list="edit-groups" bind:value={group} placeholder="None" autocomplete="off" />
+          <input id="edit-group" class="field" list="edit-groups" bind:value={group} placeholder={t("None")} autocomplete="off" />
           <datalist id="edit-groups">
             {#each launcher.groupNames as g (g)}
               <option value={g}></option>
@@ -112,67 +113,66 @@
         </div>
       </div>
 
-      <h3>Version</h3>
+      <h3>{t("Version")}</h3>
       <div class="grid">
         {#if custom}
-          <span class="label">Profile</span>
-          <p class="secondary">A custom launcher profile ({instance?.loaderVersion}). Its version can't be changed here.</p>
+          <span class="label">{t("Profile")}</span>
+          <p class="secondary">{t("A custom launcher profile ({profile}). Its version can't be changed here.", { profile: instance?.loaderVersion ?? "" })}</p>
         {:else}
           <VersionPicker bind:version bind:loader bind:loaderVersion />
         {/if}
       </div>
       {#if instance && !custom && (version !== instance.version || loader !== instance.loader || loaderVersion !== instance.loaderVersion)}
         <p class="note secondary">
-          Clover installs the new version on the next launch. Mods stay; the Mods section offers updates that match.
+          {t("Clover installs the new version on the next launch. Mods stay; the Mods section offers updates that match.")}
         </p>
       {/if}
 
-      <h3>Java and Memory</h3>
+      <h3>{t("Java and Memory")}</h3>
       <div class="grid">
-        <span class="label">Memory</span>
+        <span class="label">{t("Memory")}</span>
         <div>
           <label class="checkbox">
             <input type="checkbox" checked={!ownMemory} onchange={(e) => (ownMemory = !e.currentTarget.checked)} />
-            Use the default ({gigabytes(defaultMemory)})
+            {t("Use the default ({size})", { size: gigabytes(defaultMemory) })}
           </label>
           {#if ownMemory}
             <div class="slider">
-              <input type="range" min="1024" max="32768" step="512" bind:value={memoryMb} aria-label="Memory" aria-valuetext={gigabytes(memoryMb)} />
+              <input type="range" min="1024" max="32768" step="512" bind:value={memoryMb} aria-label={t("Memory")} aria-valuetext={gigabytes(memoryMb)} />
               <output>{gigabytes(memoryMb)}</output>
             </div>
           {/if}
         </div>
         <label for="edit-java">Java</label>
-        <input id="edit-java" class="field" bind:value={javaPath} placeholder="Automatic" spellcheck="false" autocomplete="off" />
-        <label for="edit-jvm">JVM Arguments</label>
+        <input id="edit-java" class="field" bind:value={javaPath} placeholder={t("Automatic")} spellcheck="false" autocomplete="off" />
+        <label for="edit-jvm">{t("JVM Arguments")}</label>
         <input id="edit-jvm" class="field mono" bind:value={jvmArgs} placeholder="-XX:+UseG1GC" spellcheck="false" autocomplete="off" />
       </div>
 
-      <h3>Game Window</h3>
+      <h3>{t("Game Window")}</h3>
       <div class="grid">
-        <span class="label">Size</span>
-        <div class="choices" role="radiogroup" aria-label="Game window size">
-          <label class="checkbox"><input type="radio" bind:group={windowMode} value="default" /> Default</label>
+        <span class="label">{t("Size")}</span>
+        <div class="choices" role="radiogroup" aria-label={t("Game window size")}>
+          <label class="checkbox"><input type="radio" bind:group={windowMode} value="default" /> {t("Default")}</label>
           <label class="checkbox">
-            <input type="radio" bind:group={windowMode} value="size" /> Custom
-            <input class="field small" type="number" min="320" max="7680" bind:value={width} disabled={windowMode !== "size"} aria-label="Width" />
+            <input type="radio" bind:group={windowMode} value="size" /> {t("Custom")}
+            <input class="field small" type="number" min="320" max="7680" bind:value={width} disabled={windowMode !== "size"} aria-label={t("Width")} />
             ×
-            <input class="field small" type="number" min="240" max="4320" bind:value={height} disabled={windowMode !== "size"} aria-label="Height" />
+            <input class="field small" type="number" min="240" max="4320" bind:value={height} disabled={windowMode !== "size"} aria-label={t("Height")} />
           </label>
-          <label class="checkbox"><input type="radio" bind:group={windowMode} value="fullscreen" /> Full screen</label>
+          <label class="checkbox"><input type="radio" bind:group={windowMode} value="fullscreen" /> {t("Full screen")}</label>
         </div>
       </div>
 
-      <h3>Commands</h3>
+      <h3>{t("Commands")}</h3>
       <div class="grid">
-        <label for="edit-pre">Before Launch</label>
-        <input id="edit-pre" class="field mono" bind:value={preLaunch} placeholder="None" spellcheck="false" autocomplete="off" />
-        <label for="edit-post">After Exit</label>
-        <input id="edit-post" class="field mono" bind:value={postExit} placeholder="None" spellcheck="false" autocomplete="off" />
+        <label for="edit-pre">{t("Before Launch")}</label>
+        <input id="edit-pre" class="field mono" bind:value={preLaunch} placeholder={t("None")} spellcheck="false" autocomplete="off" />
+        <label for="edit-post">{t("After Exit")}</label>
+        <input id="edit-post" class="field mono" bind:value={postExit} placeholder={t("None")} spellcheck="false" autocomplete="off" />
         <span></span>
         <p class="hint secondary">
-          Run in the game folder, with $INST_NAME, $INST_DIR, $INST_MC_DIR and $INST_JAVA set. If the command before launch
-          fails, the game doesn't start.
+          {t("Run in the game folder, with $INST_NAME, $INST_DIR, $INST_MC_DIR and $INST_JAVA set. If the command before launch fails, the game doesn't start.")}
         </p>
       </div>
     </div>
@@ -181,8 +181,8 @@
       <p class="error" role="alert">{error}</p>
     {/if}
     <div class="actions">
-      <button type="button" class="button" onclick={() => (launcher.editOpen = false)}>Cancel</button>
-      <button type="submit" class="button default" disabled={saving || !name.trim()}>Save</button>
+      <button type="button" class="button" onclick={() => (launcher.editOpen = false)}>{t("Cancel")}</button>
+      <button type="submit" class="button default" disabled={saving || !name.trim()}>{t("Save")}</button>
     </div>
   </form>
 </dialog>

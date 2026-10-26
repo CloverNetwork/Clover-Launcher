@@ -5,6 +5,8 @@
 <script lang="ts">
   import "../app.css";
   import { onMount } from "svelte";
+  import { api } from "$lib/api";
+  import { language } from "$lib/i18n";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { commandKey, platform } from "$lib/platform";
 
@@ -35,6 +37,8 @@
   // Windows start hidden and appear once drawn, so there's no blank flash first.
   onMount(() => {
     requestAnimationFrame(() => getCurrentWindow().show());
+    document.documentElement.lang = language;
+    api.setLanguage(language).catch(() => {});
   });
 </script>
 

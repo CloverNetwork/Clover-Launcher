@@ -2,6 +2,7 @@
   import { openUrl } from "@tauri-apps/plugin-opener";
   import { api, errorText, type DeviceCode } from "$lib/api";
   import { launcher } from "$lib/launcher.svelte";
+  import { t } from "$lib/i18n";
 
   let dialog: HTMLDialogElement | undefined = $state();
   let code = $state<DeviceCode | null>(null);
@@ -67,47 +68,46 @@
   onclose={() => (launcher.accountOpen = false)}
 >
   {#if code}
-    <h2 id="account-title">Finish Signing In</h2>
-    <p class="secondary">In the browser window that opened, enter this code:</p>
+    <h2 id="account-title">{t("Finish Signing In")}</h2>
+    <p class="secondary">{t("In the browser window that opened, enter this code:")}</p>
     <div class="code">
-      <output aria-label="Sign-in code">{code.userCode}</output>
-      <button class="button" onclick={copyCode}>{copied ? "Copied" : "Copy Code"}</button>
+      <output aria-label={t("Sign-in code")}>{code.userCode}</output>
+      <button class="button" onclick={copyCode}>{copied ? t("Copied") : t("Copy Code")}</button>
     </div>
-    <p class="secondary waiting" role="status">Waiting for you to finish on microsoft.com…</p>
+    <p class="secondary waiting" role="status">{t("Waiting for you to finish on microsoft.com…")}</p>
     <div class="actions">
-      <button class="button" onclick={() => openUrl(code!.verificationUri)}>Open Browser Again</button>
-      <button class="button" onclick={() => (launcher.accountOpen = false)}>Cancel</button>
+      <button class="button" onclick={() => openUrl(code!.verificationUri)}>{t("Open Browser Again")}</button>
+      <button class="button" onclick={() => (launcher.accountOpen = false)}>{t("Cancel")}</button>
     </div>
   {:else}
-    <h2 id="account-title">{launcher.accounts.length ? "Add Account" : "Sign In to Play"}</h2>
-    <p class="secondary">Use the Microsoft account that owns Minecraft: Java Edition. Your password goes only to Microsoft.</p>
+    <h2 id="account-title">{launcher.accounts.length ? t("Add Account") : t("Sign In to Play")}</h2>
+    <p class="secondary">{t("Use the Microsoft account that owns Minecraft: Java Edition. Your password goes only to Microsoft.")}</p>
     {#if error}
       <p class="error" role="alert">{error}</p>
     {/if}
     <div class="actions">
-      <button class="button" onclick={() => (launcher.accountOpen = false)}>Cancel</button>
-      <button class="button default" disabled={starting} onclick={signIn}>Sign In with Microsoft</button>
+      <button class="button" onclick={() => (launcher.accountOpen = false)}>{t("Cancel")}</button>
+      <button class="button default" disabled={starting} onclick={signIn}>{t("Sign In with Microsoft")}</button>
     </div>
 
     {#if offlineAllowed}
       <form class="offline" onsubmit={signInOffline}>
-        <h3>Offline Account <span class="badge">Development</span></h3>
+        <h3>{t("Offline Account")} <span class="badge">{t("Development")}</span></h3>
         <p class="secondary">
-          For testing until Microsoft sign-in is set up. Online servers and Realms won't accept it, and release builds
-          don't include it.
+          {t("For testing until Microsoft sign-in is set up. Online servers and Realms won't accept it, and release builds don't include it.")}
         </p>
         <div class="offline-row">
-          <label class="visually-hidden" for="offline-name">Player name</label>
+          <label class="visually-hidden" for="offline-name">{t("Player name")}</label>
           <input
             id="offline-name"
             class="field"
             bind:value={offlineName}
-            placeholder="Player name"
+            placeholder={t("Player name")}
             maxlength="16"
             autocomplete="off"
             spellcheck="false"
           />
-          <button type="submit" class="button" disabled={!validOfflineName}>Use Offline</button>
+          <button type="submit" class="button" disabled={!validOfflineName}>{t("Use Offline")}</button>
         </div>
       </form>
     {/if}

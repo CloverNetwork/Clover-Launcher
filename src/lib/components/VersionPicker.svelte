@@ -5,6 +5,7 @@
 <script lang="ts">
   import { api, errorText, type LoaderVersion, type VersionEntry } from "$lib/api";
   import { launcher } from "$lib/launcher.svelte";
+  import { t } from "$lib/i18n";
 
   let {
     version = $bindable(),
@@ -64,23 +65,23 @@
   </select>
   <label class="checkbox">
     <input type="checkbox" bind:checked={showAll} />
-    Show snapshots and old versions
+    {t("Show snapshots and old versions")}
   </label>
 </div>
 
-<label for="picker-loader">Mod Loader</label>
+<label for="picker-loader">{t("Mod Loader")}</label>
 <select id="picker-loader" class="field" bind:value={loader}>
-  <option value="vanilla">None</option>
+  <option value="vanilla">{t("None")}</option>
   {#each launcher.loaders as source (source.id)}
     <option value={source.id}>{source.name}</option>
   {/each}
 </select>
 
 {#if loader !== "vanilla"}
-  <label for="picker-loader-version">{loaderName} Version</label>
+  <label for="picker-loader-version">{t("{loader} Version", { loader: loaderName })}</label>
   <div>
     {#if loadingLoaders}
-      <select id="picker-loader-version" class="field" disabled><option>Loading versions…</option></select>
+      <select id="picker-loader-version" class="field" disabled><option>{t("Loading versions…")}</option></select>
     {:else if loaderVersions.length}
       <select id="picker-loader-version" class="field" bind:value={loaderVersion}>
         {#each loaderVersions as v (v.version)}
@@ -88,7 +89,7 @@
         {/each}
       </select>
     {:else}
-      <p class="secondary unavailable">{loaderName} isn't available for Minecraft {version}.</p>
+      <p class="secondary unavailable">{t("{loader} isn't available for Minecraft {version}.", { loader: loaderName, version })}</p>
     {/if}
   </div>
 {/if}

@@ -2,6 +2,7 @@
 
 mod chrome;
 mod events;
+mod i18n;
 mod menu;
 mod presence;
 mod shortcuts;
@@ -437,6 +438,15 @@ async fn export_modpack(app: AppHandle, state: State<'_, AppState>, id: String, 
     Ok(exported)
 }
 
+/// The window's language, for the menu bar and window titles. Rebuilds the menu if it changed.
+#[tauri::command]
+fn set_language(app: AppHandle, state: State<'_, AppState>, language: String) -> Result<()> {
+    if i18n::set(&language) && cfg!(target_os = "macos") {
+        ui(menu::build(&app, &auth::accounts(&state.paths)).and_then(|menu| app.set_menu(menu)))?;
+    }
+    Ok(())
+}
+
 #[tauri::command]
 fn get_instance(state: State<'_, AppState>, id: String) -> Result<Instance> {
     instances::get(&state.paths, &id)
@@ -710,6 +720,7 @@ fn open_settings(app: AppHandle) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    i18n::init();
     tauri::Builder::default()
         // First, so a second start hands its `--launch` to the open app and quits.
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
@@ -807,6 +818,7 @@ pub fn run() {
             install_performance_mods,
             discord_built_in,
             get_instance,
+            set_language,
             save_server,
             remove_server,
             ping_server,

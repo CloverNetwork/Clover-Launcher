@@ -19,6 +19,7 @@
     type ModSource,
   } from "$lib/api";
   import { launcher } from "$lib/launcher.svelte";
+  import { locale, t } from "$lib/i18n";
   import Icon from "./Icon.svelte";
 
   type Tab = ModSource | "file";
@@ -35,7 +36,7 @@
   let progress = $state<ImportProgress | null>(null);
   let blocked = $state<{ pack: ImportedPack; files: BlockedFile[] } | null>(null);
 
-  const needsKey = $derived(tab === "curseforge" && error?.includes("API key"));
+  const needsKey = $derived(tab === "curseforge" && error?.includes(t("API key")));
   const busy = $derived(importing !== null);
 
   onMount(() => {
@@ -85,7 +86,7 @@
     error = null;
     try {
       const pack = await job();
-      notifyIfAway("Modpack Imported", `${pack.instance.name} is ready to play.`);
+      notifyIfAway(t("Modpack Imported"), t("{name} is ready to play.", { name: pack.instance.name }));
       await launcher.showImported(pack.instance);
       if (pack.blocked.length) blocked = { pack, files: pack.blocked };
       else launcher.importOpen = false;
@@ -99,17 +100,17 @@
 
   async function chooseFile() {
     const path = await open({
-      title: "Choose a Modpack",
-      filters: [{ name: "Modpack", extensions: ["mrpack", "zip"] }],
+      title: t("Choose a Modpack"),
+      filters: [{ name: t("Modpack"), extensions: ["mrpack", "zip"] }],
     });
     if (typeof path === "string") run("file", () => api.importModpackFile(path));
   }
 
-  const compact = new Intl.NumberFormat(undefined, { notation: "compact" });
+  const compact = new Intl.NumberFormat(locale, { notation: "compact" });
   const progressText = $derived(
     progress?.total
-      ? `Downloading files: ${progress.done.toLocaleString()} of ${progress.total.toLocaleString()}`
-      : (progress?.stage ?? "Starting…"),
+      ? t("Downloading files: {done} of {total}", { done: progress.done.toLocaleString(locale), total: progress.total.toLocaleString(locale) })
+      : (progress?.stage ?? t("Starting…")),
   );
 </script>
 
@@ -121,16 +122,16 @@
   oncancel={(e) => busy && e.preventDefault()}
 >
   <header>
-    <h2 id="import-title">Import Modpack</h2>
-    <p class="secondary">Each modpack becomes a new instance with its own mods and settings.</p>
+    <h2 id="import-title">{t("Import Modpack")}</h2>
+    <p class="secondary">{t("Each modpack becomes a new instance with its own mods and settings.")}</p>
   </header>
 
   {#if blocked}
     <div class="blocked">
       <p>
-        <strong>{blocked.pack.instance.name}</strong> is ready, but {blocked.files.length === 1 ? "one file" : `${blocked.files.length} files`}
-        can only be downloaded from CurseForge's website. Download {blocked.files.length === 1 ? "it" : "each one"} and put
-        it in the folder shown, inside the instance's game folder.
+        {blocked.files.length === 1
+          ? t("{name} is ready, but one file can only be downloaded from CurseForge's website. Download it and put it in the folder shown, inside the instance's game folder.", { name: blocked.pack.instance.name })
+          : t("{name} is ready, but {n} files can only be downloaded from CurseForge's website. Download each one and put it in the folder shown, inside the instance's game folder.", { name: blocked.pack.instance.name, n: blocked.files.length })}
       </p>
       <ul>
         {#each blocked.files as file (file.name)}
@@ -143,24 +144,24 @@
     </div>
     <div class="footer">
       <span class="status"></span>
-      <button class="button" onclick={() => api.showModsFolder(blocked!.pack.instance.id)}>Show Mods Folder</button>
-      <button class="button default" onclick={() => (launcher.importOpen = false)}>Done</button>
+      <button class="button" onclick={() => api.showModsFolder(blocked!.pack.instance.id)}>{t("Show Mods Folder")}</button>
+      <button class="button default" onclick={() => (launcher.importOpen = false)}>{t("Done")}</button>
     </div>
   {:else}
     <div class="controls">
-      <div class="segmented" role="radiogroup" aria-label="Import from">
+      <div class="segmented" role="radiogroup" aria-label={t("Import from")}>
         <button role="radio" aria-checked={tab === "modrinth"} disabled={busy} onclick={() => (tab = "modrinth")}>Modrinth</button>
         <button role="radio" aria-checked={tab === "curseforge"} disabled={busy} onclick={() => (tab = "curseforge")}>CurseForge</button>
-        <button role="radio" aria-checked={tab === "file"} disabled={busy} onclick={() => (tab = "file")}>From File</button>
+        <button role="radio" aria-checked={tab === "file"} disabled={busy} onclick={() => (tab = "file")}>{t("From File")}</button>
       </div>
       {#if tab !== "file"}
         <label class="search">
           <Icon name="search" size={14} />
-          <span class="visually-hidden">Search modpacks</span>
+          <span class="visually-hidden">{t("Search modpacks")}</span>
           <input
             type="search"
             bind:value={query}
-            placeholder="Search {tab === 'modrinth' ? 'Modrinth' : 'CurseForge'} modpacks"
+            placeholder={t("Search {site} modpacks", { site: tab === "modrinth" ? "Modrinth" : "CurseForge" })}
             autocomplete="off"
             spellcheck="false"
             disabled={busy}
@@ -172,22 +173,21 @@
     <div class="results" aria-busy={loading || busy}>
       {#if tab === "file"}
         <div class="message">
-          <p>Choose a Modrinth pack (<code>.mrpack</code>) or a CurseForge modpack <code>.zip</code> from this computer.</p>
+          <p>{t("Choose a Modrinth pack (.mrpack) or a CurseForge modpack .zip from this computer.")}</p>
           <button class="button default" disabled={busy} onclick={chooseFile}>
-            {importing === "file" ? "Importing…" : "Choose File…"}
+            {importing === "file" ? t("Importing…") : t("Choose File…")}
           </button>
-          <p class="secondary small">CurseForge zips need a CurseForge API key to download their mods.</p>
+          <p class="secondary small">{t("CurseForge zips need a CurseForge API key to download their mods.")}</p>
         </div>
       {:else if needsKey}
         <div class="message">
           <p>{error}</p>
           <p class="secondary small">
-            CurseForge only serves launchers that have a key approved for third-party apps. Apply for one, then paste it in
-            Settings. Modrinth works without a key.
+            {t("CurseForge only serves launchers that have a key approved for third-party apps. Apply for one, then paste it in Settings. Modrinth works without a key.")}
           </p>
           <div class="message-actions">
-            <button class="button" onclick={() => openUrl(CURSEFORGE_KEY_FORM)}>Apply for a Key</button>
-            <button class="button default" onclick={() => api.openSettings()}>Open Settings</button>
+            <button class="button" onclick={() => openUrl(CURSEFORGE_KEY_FORM)}>{t("Apply for a Key")}</button>
+            <button class="button default" onclick={() => api.openSettings()}>{t("Open Settings")}</button>
           </div>
         </div>
       {:else if hits.length}
@@ -202,24 +202,24 @@
               {/if}
               <div class="text">
                 <button class="title" onclick={() => openUrl(hit.pageUrl)}>{hit.title}</button>
-                <span class="secondary byline">by {hit.author} · {compact.format(hit.downloads)} downloads</span>
+                <span class="secondary byline">{t("by {author} · {downloads} downloads", { author: hit.author, downloads: compact.format(hit.downloads) })}</span>
                 <span class="description">{hit.description}</span>
               </div>
               <button class="button install" disabled={busy} onclick={() => run(key, () => api.installModpack(hit.source, hit.id))}>
-                {importing === key ? "Importing…" : "Install"}
+                {importing === key ? t("Importing…") : t("Install")}
               </button>
             </li>
           {/each}
         </ul>
         {#if hits.length < total}
           <button class="button more" disabled={loading || busy} onclick={() => tab !== "file" && search(tab, query, hits.length)}>
-            {loading ? "Loading…" : "Show More"}
+            {loading ? t("Loading…") : t("Show More")}
           </button>
         {/if}
       {:else if loading}
-        <p class="message secondary">Searching…</p>
+        <p class="message secondary">{t("Searching…")}</p>
       {:else if !error}
-        <p class="message secondary">No modpacks match{query ? ` “${query}”` : ""}.</p>
+        <p class="message secondary">{query ? t("No modpacks match “{query}”.", { query }) : t("No modpacks found.")}</p>
       {/if}
     </div>
 
@@ -228,13 +228,13 @@
         {#if busy}
           <span class="secondary">{progressText}</span>
           {#if progress?.total}
-            <progress max={progress.total} value={progress.done} aria-label="Import progress"></progress>
+            <progress max={progress.total} value={progress.done} aria-label={t("Import progress")}></progress>
           {/if}
         {:else if error && !needsKey}
           <span class="error">{error}</span>
         {/if}
       </div>
-      <button class="button" disabled={busy} onclick={() => (launcher.importOpen = false)}>Cancel</button>
+      <button class="button" disabled={busy} onclick={() => (launcher.importOpen = false)}>{t("Cancel")}</button>
     </div>
   {/if}
 </dialog>
@@ -405,10 +405,6 @@
     display: flex;
     justify-content: center;
     gap: 8px;
-  }
-
-  code {
-    font: 12px var(--mono);
   }
 
   .footer {

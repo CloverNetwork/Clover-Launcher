@@ -2,6 +2,7 @@
 <script lang="ts">
   import { Menu } from "@tauri-apps/api/menu";
   import { api, errorText, type Instance, type World } from "$lib/api";
+  import { locale, t } from "$lib/i18n";
   import { notifyIfAway } from "$lib/notify";
   import { launcher } from "$lib/launcher.svelte";
   import { DELETE_INSTANCE, SHOW_FOLDER } from "$lib/platform";
@@ -38,7 +39,7 @@
     }
   }
 
-  const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
+  const dateFormat = new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" });
   const fileStamp = () => {
     const d = new Date();
     const pad = (n: number) => String(n).padStart(2, "0");
@@ -50,8 +51,8 @@
     backingUp = world.folder;
     try {
       await api.backupWorld(instance.id, world.folder, fileStamp());
-      status = `Backed up ${world.name}.`;
-      notifyIfAway("World Backed Up", world.name);
+      status = t("Backed up {name}.", { name: world.name });
+      notifyIfAway(t("World Backed Up"), world.name);
     } catch (e) {
       error = errorText(e);
     } finally {
@@ -73,10 +74,10 @@
     e.preventDefault();
     const menu = await Menu.new({
       items: [
-        { id: "play", text: "Play", enabled: !busy, action: () => play(world) },
+        { id: "play", text: t("Play"), enabled: !busy, action: () => play(world) },
         { item: "Separator" },
-        { id: "datapacks", text: "Data Packs…", action: () => (launcher.dataPacksWorld = world) },
-        { id: "backup", text: "Back Up", enabled: !backingUp, action: () => backup(world) },
+        { id: "datapacks", text: t("Data Packs…"), action: () => (launcher.dataPacksWorld = world) },
+        { id: "backup", text: t("Back Up"), enabled: !backingUp, action: () => backup(world) },
         { id: "show", text: SHOW_FOLDER, action: () => api.showWorld(instance.id, world.folder) },
         { item: "Separator" },
         { id: "trash", text: DELETE_INSTANCE, enabled: !running, action: () => trash(world) },
@@ -88,14 +89,14 @@
 
 <section class="worlds" aria-labelledby="worlds-title">
   <header>
-    <h2 id="worlds-title">Worlds</h2>
+    <h2 id="worlds-title">{t("Worlds")}</h2>
     {#if worlds.length}
       <span class="secondary count">{worlds.length}</span>
     {/if}
   </header>
 
   {#if backingUp || status}
-    <p class="note secondary" role="status">{backingUp ? "Backing up…" : status}</p>
+    <p class="note secondary" role="status">{backingUp ? t("Backing up…") : status}</p>
   {/if}
   {#if error}
     <p class="error" role="alert">{error}</p>
@@ -113,21 +114,21 @@
           <div class="text">
             <span class="title">{world.name}</span>
             <span class="secondary detail">
-              {world.mode}{world.version ? ` · ${world.version}` : ""}{world.lastPlayed
-                ? ` · Played ${dateFormat.format(world.lastPlayed * 1000)}`
+              {t(world.mode)}{world.version ? ` · ${world.version}` : ""}{world.lastPlayed
+                ? ` · ${t("Played {date}", { date: dateFormat.format(world.lastPlayed * 1000) })}`
                 : ""}
             </span>
           </div>
-          <button class="button small" onclick={() => (launcher.dataPacksWorld = world)}>Data Packs…</button>
-          <button class="button small" disabled={busy} onclick={() => play(world)}>Play</button>
-          <button class="icon-button" aria-label="More for {world.name}" title="More" onclick={(e) => showMenu(e, world)}>
+          <button class="button small" onclick={() => (launcher.dataPacksWorld = world)}>{t("Data Packs…")}</button>
+          <button class="button small" disabled={busy} onclick={() => play(world)}>{t("Play")}</button>
+          <button class="icon-button" aria-label={t("More for {name}", { name: world.name })} title={t("More")} onclick={(e) => showMenu(e, world)}>
             <Icon name="more" />
           </button>
         </li>
       {/each}
     </ul>
   {:else if loaded}
-    <p class="empty secondary">No worlds yet. Worlds you create in the game show up here.</p>
+    <p class="empty secondary">{t("No worlds yet. Worlds you create in the game show up here.")}</p>
   {/if}
 </section>
 

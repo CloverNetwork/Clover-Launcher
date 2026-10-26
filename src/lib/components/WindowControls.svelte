@@ -8,6 +8,7 @@
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { api, events, type WindowChrome } from "$lib/api";
   import Icon from "./Icon.svelte";
+  import { t } from "$lib/i18n";
 
   /** The main window quits the app; other windows just close. */
   let { quits = false }: { quits?: boolean } = $props();
@@ -30,10 +31,10 @@
 
 {#if chrome?.buttons}
   <div class="controls">
-    <button class="icon-button" aria-label="Full Screen" title="Full Screen" onclick={toggleFullscreen}>
+    <button class="icon-button" aria-label={t("Full Screen")} title={t("Full Screen")} onclick={toggleFullscreen}>
       <Icon name="fullscreen" size={14} />
     </button>
-    <button class="icon-button" aria-label={quits ? "Quit" : "Close"} title={quits ? "Quit" : "Close"} onclick={close}>
+    <button class="icon-button" aria-label={quits ? t("Quit") : t("Close")} title={quits ? t("Quit") : t("Close")} onclick={close}>
       <Icon name="close" size={14} />
     </button>
   </div>

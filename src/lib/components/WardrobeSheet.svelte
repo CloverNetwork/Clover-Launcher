@@ -8,6 +8,7 @@
   import { open } from "@tauri-apps/plugin-dialog";
   import { api, errorText, type LibrarySkin, type SkinVariant, type Wardrobe } from "$lib/api";
   import { launcher } from "$lib/launcher.svelte";
+  import { t } from "$lib/i18n";
   import CapeThumb from "./CapeThumb.svelte";
   import Icon from "./Icon.svelte";
   import SkinPreview from "./SkinPreview.svelte";
@@ -102,7 +103,7 @@
   }
 
   async function addSkin() {
-    const path = await open({ title: "Choose a Skin", filters: [{ name: "Skin", extensions: ["png"] }] });
+    const path = await open({ title: t("Choose a Skin"), filters: [{ name: t("Skin"), extensions: ["png"] }] });
     if (typeof path !== "string") return;
     error = null;
     try {
@@ -120,8 +121,8 @@
     select(selection);
     const items =
       selection.kind === "library"
-        ? [{ id: "remove", text: "Remove from Library", action: () => removeSkin(selection.id) }]
-        : [{ id: "save", text: "Save to Library", enabled: !!worn, action: saveWorn }];
+        ? [{ id: "remove", text: t("Remove from Library"), action: () => removeSkin(selection.id) }]
+        : [{ id: "save", text: t("Save to Library"), enabled: !!worn, action: saveWorn }];
     await (await Menu.new({ items })).popup();
   }
 
@@ -134,11 +135,11 @@
   async function saveWorn() {
     if (!worn) return;
     try {
-      const name = `${launcher.account?.name ?? "Saved"} skin`;
+      const name = t("{name} skin", { name: launcher.account?.name ?? t("Saved") });
       const skin = await api.saveWornSkin(worn.url, wornVariant, name);
       if (!library.some((s) => s.id === skin.id)) library = [...library, skin];
       textures[skin.id] ??= await api.librarySkinTexture(skin.id);
-      notice = "Saved the current skin to your library.";
+      notice = t("Saved the current skin to your library.");
     } catch (e) {
       error = errorText(e);
     }
@@ -157,7 +158,7 @@
       await Promise.all((result?.skins ?? []).map(async (s) => (textures[s.url] ??= await api.skinTexture(s.url))));
       select({ kind: "worn" });
       selectedCape = wornCape;
-      notice = "Updated. Servers show the change the next time you join.";
+      notice = t("Updated. Servers show the change the next time you join.");
     } catch (e) {
       error = errorText(e);
     } finally {
@@ -177,33 +178,33 @@
   onclose={() => (launcher.skinsOpen = false)}
 >
   <header>
-    <h2 id="wardrobe-title">Skins & Capes</h2>
+    <h2 id="wardrobe-title">{t("Skins & Capes")}</h2>
     <p class="secondary">{launcher.account?.name ?? ""}</p>
   </header>
 
   {#if !loading && !online}
     <p class="note secondary">
-      Skins and capes need a Microsoft account. You can still collect skins here and wear them once you've signed in.
+      {t("Skins and capes need a Microsoft account. You can still collect skins here and wear them once you've signed in.")}
     </p>
   {/if}
 
   <div class="layout">
-    <section class="preview" aria-label="Preview">
+    <section class="preview" aria-label={t("Preview")}>
       <div class="figure">
-        <SkinPreview skin={previewTexture} cape={previewCape} {variant} {view} scale={9} label="Skin preview, {view} view" />
+        <SkinPreview skin={previewTexture} cape={previewCape} {variant} {view} scale={9} label={t(view === "front" ? "Skin preview, front view" : "Skin preview, back view")} />
       </div>
-      <div class="segmented" role="radiogroup" aria-label="View">
-        <button role="radio" aria-checked={view === "front"} onclick={() => (view = "front")}>Front</button>
-        <button role="radio" aria-checked={view === "back"} onclick={() => (view = "back")}>Back</button>
+      <div class="segmented" role="radiogroup" aria-label={t("View")}>
+        <button role="radio" aria-checked={view === "front"} onclick={() => (view = "front")}>{t("Front")}</button>
+        <button role="radio" aria-checked={view === "back"} onclick={() => (view = "back")}>{t("Back")}</button>
       </div>
-      <div class="segmented" role="radiogroup" aria-label="Arm model">
-        <button role="radio" aria-checked={variant === "classic"} onclick={() => changeVariant("classic")}>Classic</button>
-        <button role="radio" aria-checked={variant === "slim"} onclick={() => changeVariant("slim")}>Slim</button>
+      <div class="segmented" role="radiogroup" aria-label={t("Arm model")}>
+        <button role="radio" aria-checked={variant === "classic"} onclick={() => changeVariant("classic")}>{t("Classic")}</button>
+        <button role="radio" aria-checked={variant === "slim"} onclick={() => changeVariant("slim")}>{t("Slim")}</button>
       </div>
     </section>
 
     <div class="choices">
-      <h3 id="skins-heading">Skins</h3>
+      <h3 id="skins-heading">{t("Skins")}</h3>
       <div class="grid" role="radiogroup" aria-labelledby="skins-heading">
         {#if online}
           <button
@@ -214,7 +215,7 @@
             oncontextmenu={(e) => showSkinMenu(e, { kind: "worn" })}
           >
             <SkinPreview skin={worn ? textures[worn.url] : null} variant={wornVariant} scale={3} />
-            <span>Current</span>
+            <span>{t("Current")}</span>
           </button>
         {/if}
         {#each library as skin (skin.id)}
@@ -232,26 +233,26 @@
         {/each}
         <button class="tile add" onclick={addSkin}>
           <Icon name="plus" size={20} />
-          <span>Add Skin…</span>
+          <span>{t("Add Skin…")}</span>
         </button>
       </div>
 
       {#if online}
-        <h3 id="capes-heading">Capes</h3>
+        <h3 id="capes-heading">{t("Capes")}</h3>
         <div class="grid" role="radiogroup" aria-labelledby="capes-heading">
           <button class="tile cape" role="radio" aria-checked={selectedCape === null} onclick={() => selectCape(null)}>
             <span class="none" aria-hidden="true"></span>
-            <span>No Cape</span>
+            <span>{t("No Cape")}</span>
           </button>
           {#each wardrobe?.capes ?? [] as cape (cape.id)}
             <button class="tile cape" role="radio" aria-checked={selectedCape === cape.id} onclick={() => selectCape(cape.id)}>
               <CapeThumb texture={textures[`cape:${cape.id}`] ?? null} scale={4} />
-              <span>{cape.alias ?? "Cape"}</span>
+              <span>{cape.alias ?? t("Cape")}</span>
             </button>
           {/each}
         </div>
         {#if wardrobe?.capes.length === 0}
-          <p class="secondary hint">This account doesn't own any capes.</p>
+          <p class="secondary hint">{t("This account doesn't own any capes.")}</p>
         {/if}
       {/if}
     </div>
@@ -261,10 +262,10 @@
     <p class="message" role="status" aria-live="polite">
       {#if error}<span class="error">{error}</span>{:else if notice}<span class="secondary">{notice}</span>{/if}
     </p>
-    <button class="button" onclick={() => (launcher.skinsOpen = false)}>Done</button>
+    <button class="button" onclick={() => (launcher.skinsOpen = false)}>{t("Done")}</button>
     {#if online}
       <button class="button default" disabled={applying || loading || (!skinChanged && !capeChanged)} onclick={apply}>
-        {applying ? "Applying…" : "Apply"}
+        {applying ? t("Applying…") : t("Apply")}
       </button>
     {/if}
   </div>

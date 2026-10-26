@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { t } from "./i18n";
 
 export type Instance = {
   id: string;
@@ -69,10 +70,10 @@ export type Place = { kind: ContentKind; world?: string };
 export const MODS: Place = { kind: "mod" };
 /** Each kind's names: the title for headings and buttons, and the plural in sentences. */
 export const CONTENT: Record<ContentKind, { title: string; plural: string }> = {
-  mod: { title: "Mods", plural: "mods" },
-  resourcepack: { title: "Resource Packs", plural: "resource packs" },
-  shader: { title: "Shader Packs", plural: "shader packs" },
-  datapack: { title: "Data Packs", plural: "data packs" },
+  mod: { title: t("Mods"), plural: t("mods") },
+  resourcepack: { title: t("Resource Packs"), plural: t("resource packs") },
+  shader: { title: t("Shader Packs"), plural: t("shader packs") },
+  datapack: { title: t("Data Packs"), plural: t("data packs") },
 };
 export type World = {
   folder: string;
@@ -205,6 +206,8 @@ export const api = {
   openScreenshot: (id: string, file: string, reveal = false) => invoke<void>("open_screenshot", { id, file, reveal }),
   trashScreenshot: (id: string, file: string) => invoke<void>("trash_screenshot", { id, file }),
   exportModpack: (id: string, path: string) => invoke<Exported>("export_modpack", { id, path }),
+  /** Tells the menu bar and window titles which language the window uses. */
+  setLanguage: (language: string) => invoke<void>("set_language", { language }),
   getInstance: (id: string) => invoke<Instance>("get_instance", { id }),
   /** Resolves to what was added and how many of the pack's mods don't exist for this instance. */
   installPerformanceMods: (id: string) => invoke<{ added: string[]; unavailable: number }>("install_performance_mods", { id }),
@@ -274,5 +277,6 @@ export const events = {
 };
 
 export function errorText(e: unknown): string {
-  return typeof e === "string" ? e : e instanceof Error ? e.message : "Something went wrong.";
+  // Messages from Rust are English; known ones have translations.
+  return t(typeof e === "string" ? e : e instanceof Error ? e.message : "Something went wrong.");
 }
