@@ -32,22 +32,18 @@ The launcher itself lives in `crates/clover-core`, a plain Rust library with no 
 
 ## Releasing
 
-Pushing a version tag builds Clover for macOS, Windows and Linux and attaches the installers
-to a draft GitHub release:
-
-```
-git tag v0.2.0
-git push origin v0.2.0
-```
-
-Bump the version in `package.json`, `Cargo.toml` and `src-tauri/tauri.conf.json` first.
-Installed copies update themselves from the latest published release, so publish the draft
-when it's ready.
+In the Actions tab, open **Release → Run workflow** and enter the new version, such as `0.2.0`.
+It sets the version in `package.json`, `Cargo.toml` and `src-tauri/tauri.conf.json`, commits
+and tags it, builds Clover for macOS, Windows and Linux, and publishes a GitHub release.
+Installed copies update themselves from the latest published release.
 
 The repository needs two secrets, from `pnpm tauri signer generate`:
 `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Updates signed with any
-other key are refused. macOS builds are unsigned until Apple Developer ID secrets are added
-(see the workflow file).
+other key are refused.
+
+To sign and notarize the Mac app, also add `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`,
+`APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD` and `APPLE_TEAM_ID`. Without them the
+Mac app is unsigned.
 
 ## Notes
 
