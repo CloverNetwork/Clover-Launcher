@@ -159,7 +159,7 @@
         <Icon name="refresh" size={14} />
       </button>
     {/if}
-    <button class="icon-button" aria-label={t("Show {title} Folder", { title: names.title })} title={t("Show {title} Folder", { title: names.title })} onclick={() => api.showModsFolder(instance.id, place)}>
+    <button class="icon-button" aria-label={t("Show {title} Folder", { title: names.title })} title={t("Show {title} Folder", { title: names.title })} onclick={() => api.showModsFolder(instance.id, place).catch((e) => (error = errorText(e)))}>
       <Icon name="folder" />
     </button>
     {#if isMods}

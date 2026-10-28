@@ -78,7 +78,7 @@
         { item: "Separator" },
         { id: "datapacks", text: t("Data Packs…"), action: () => (launcher.dataPacksWorld = world) },
         { id: "backup", text: t("Back Up"), enabled: !backingUp, action: () => backup(world) },
-        { id: "show", text: SHOW_FOLDER, action: () => api.showWorld(instance.id, world.folder) },
+        { id: "show", text: SHOW_FOLDER, action: () => api.showWorld(instance.id, world.folder).catch((e) => (error = errorText(e))) },
         { item: "Separator" },
         { id: "trash", text: DELETE_INSTANCE, enabled: !running, action: () => trash(world) },
       ],

@@ -2,6 +2,7 @@
 
 mod chrome;
 mod events;
+mod files;
 mod i18n;
 mod menu;
 mod presence;
@@ -397,10 +398,10 @@ fn remove_mod(state: State<'_, AppState>, id: String, place: Option<Place>, file
 }
 
 #[tauri::command]
-fn show_mods_folder(app: AppHandle, state: State<'_, AppState>, id: String, place: Option<Place>) -> Result<()> {
+async fn show_mods_folder(app: AppHandle, state: State<'_, AppState>, id: String, place: Option<Place>) -> Result<()> {
     let instance = instances::get(&state.paths, &id)?;
     let dir = mods::folder(&place.unwrap_or_default().shelf(&state.paths, &instance)?)?;
-    app.opener().open_path(dir.to_string_lossy(), None::<&str>).map_err(|e| msg(e.to_string()))
+    files::open(&app, &dir)
 }
 
 #[tauri::command]
@@ -416,7 +417,7 @@ async fn backup_world(app: AppHandle, state: State<'_, AppState>, id: String, fo
     let zip = tauri::async_runtime::spawn_blocking(move || worlds::backup(&paths, &instance, &folder, &label))
         .await
         .map_err(|e| msg(e.to_string()))??;
-    app.opener().reveal_item_in_dir(zip).map_err(|e| msg(e.to_string()))
+    files::reveal(&app, &zip)
 }
 
 #[tauri::command]
@@ -428,9 +429,9 @@ fn trash_world(state: State<'_, AppState>, running: State<'_, Running>, id: Stri
 }
 
 #[tauri::command]
-fn show_world(app: AppHandle, state: State<'_, AppState>, id: String, folder: String) -> Result<()> {
+async fn show_world(app: AppHandle, state: State<'_, AppState>, id: String, folder: String) -> Result<()> {
     let dir = worlds::world_dir(&state.paths, &instances::get(&state.paths, &id)?, &folder)?;
-    app.opener().reveal_item_in_dir(dir).map_err(|e| msg(e.to_string()))
+    files::reveal(&app, &dir)
 }
 
 #[tauri::command]
@@ -440,10 +441,9 @@ fn list_screenshots(state: State<'_, AppState>, id: String) -> Result<Vec<worlds
 
 /// Opens a screenshot in the system's image viewer, or reveals it with `reveal`.
 #[tauri::command]
-fn open_screenshot(app: AppHandle, state: State<'_, AppState>, id: String, file: String, reveal: bool) -> Result<()> {
+async fn open_screenshot(app: AppHandle, state: State<'_, AppState>, id: String, file: String, reveal: bool) -> Result<()> {
     let path = worlds::screenshot_path(&state.paths, &instances::get(&state.paths, &id)?, &file)?;
-    let opener = app.opener();
-    if reveal { opener.reveal_item_in_dir(path) } else { opener.open_path(path.to_string_lossy(), None::<&str>) }.map_err(|e| msg(e.to_string()))
+    if reveal { files::reveal(&app, &path) } else { files::open(&app, &path) }
 }
 
 #[tauri::command]
@@ -458,7 +458,7 @@ async fn export_modpack(app: AppHandle, state: State<'_, AppState>, id: String, 
     let settings = settings::load(&state.paths);
     let out = std::path::PathBuf::from(path);
     let exported = export::export(&sites(&state, &settings), &state.paths, &instance, &out).await?;
-    let _ = app.opener().reveal_item_in_dir(out);
+    let _ = files::reveal(&app, &out);
     Ok(exported)
 }
 
@@ -581,10 +581,10 @@ fn stop_instance(running: State<'_, Running>, id: String) {
 }
 
 #[tauri::command]
-fn show_instance_folder(app: AppHandle, state: State<'_, AppState>, id: String) -> Result<()> {
+async fn show_instance_folder(app: AppHandle, state: State<'_, AppState>, id: String) -> Result<()> {
     let dir = state.paths.instance(&id).join("minecraft");
     std::fs::create_dir_all(&dir)?;
-    app.opener().open_path(dir.to_string_lossy(), None::<&str>).map_err(|e| msg(e.to_string()))
+    files::open(&app, &dir)
 }
 
 #[tauri::command]

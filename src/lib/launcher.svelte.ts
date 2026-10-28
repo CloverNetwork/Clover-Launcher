@@ -370,7 +370,12 @@ class Launcher {
   }
 
   async showFolder(id = this.selectedId) {
-    if (id) await api.showInstanceFolder(id);
+    if (!id) return;
+    try {
+      await api.showInstanceFolder(id);
+    } catch (e) {
+      this.error = { instanceId: id, message: errorText(e) };
+    }
   }
 
   /** Saves the instance as a Modrinth pack wherever the person picks. */

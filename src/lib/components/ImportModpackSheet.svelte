@@ -144,7 +144,7 @@
     </div>
     <div class="footer">
       <span class="status"></span>
-      <button class="button" onclick={() => api.showModsFolder(blocked!.pack.instance.id)}>{t("Show Mods Folder")}</button>
+      <button class="button" onclick={() => api.showModsFolder(blocked!.pack.instance.id).catch((e) => (error = errorText(e)))}>{t("Show Mods Folder")}</button>
       <button class="button default" onclick={() => (launcher.importOpen = false)}>{t("Done")}</button>
     </div>
   {:else}
