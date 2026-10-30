@@ -245,6 +245,7 @@ mod tests {
             last_played: None,
             installed: true,
             play_seconds: 0,
+            custom_jar: None,
             options: Default::default(),
         }
     }
@@ -293,6 +294,7 @@ mod mac_tests {
             last_played: None,
             installed: true,
             play_seconds: 0,
+            custom_jar: None,
             options: Default::default(),
         };
         let bundle = mac_app(&instance, Path::new("/Applications/Clover Launcher.app/Contents/MacOS/clover-launcher"), &home).unwrap();

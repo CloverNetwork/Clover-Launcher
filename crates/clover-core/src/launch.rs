@@ -69,7 +69,12 @@ pub fn build_command(
         .filter_map(|l| l.artifact())
         .map(|f| paths.libraries().join(f.path).to_string_lossy().into_owned())
         .collect();
-    classpath.push(client_jar_path(paths, version).to_string_lossy().into_owned());
+    // A replacement jar from Edit Instance stands in for Mojang's.
+    let client_jar = match crate::custom_jar::for_launch(paths, instance, version)? {
+        Some(jar) => jar,
+        None => client_jar_path(paths, version),
+    };
+    classpath.push(client_jar.to_string_lossy().into_owned());
 
     let vars: HashMap<&str, String> = HashMap::from([
         ("auth_player_name", session.profile.name.clone()),

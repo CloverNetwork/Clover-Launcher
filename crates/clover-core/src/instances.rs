@@ -26,6 +26,9 @@ pub struct Instance {
     /// Time spent in the game, in seconds.
     #[serde(default)]
     pub play_seconds: u64,
+    /// The file name of a jar used instead of Mojang's client jar; see `custom_jar`.
+    #[serde(default)]
+    pub custom_jar: Option<String>,
     /// What the person changed in Edit Instance; empty means "use the defaults".
     #[serde(default)]
     pub options: InstanceOptions,
@@ -117,6 +120,7 @@ pub fn create(paths: &Paths, name: &str, version: &str, loader: &str, loader_ver
         last_played: None,
         installed: false,
         play_seconds: 0,
+        custom_jar: None,
         options: Default::default(),
     };
     save(paths, &instance)?;
@@ -163,6 +167,7 @@ pub fn duplicate(paths: &Paths, id: &str) -> Result<Instance> {
     copy.profile_id = original.profile_id.clone();
     copy.installed = original.installed;
     copy.options = original.options.clone();
+    copy.custom_jar = original.custom_jar.clone();
     save(paths, &copy)?;
     Ok(copy)
 }

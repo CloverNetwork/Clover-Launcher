@@ -15,6 +15,8 @@ export type Instance = {
   installed: boolean;
   /** Time spent in the game, in seconds. */
   playSeconds: number;
+  /** The file name of a jar used instead of Mojang's client jar. */
+  customJar: string | null;
   options: InstanceOptions;
 };
 
@@ -208,6 +210,8 @@ export const api = {
   exportModpack: (id: string, path: string) => invoke<Exported>("export_modpack", { id, path }),
   /** Tells the menu bar and window titles which language the window uses. */
   setLanguage: (language: string) => invoke<void>("set_language", { language }),
+  setCustomJar: (id: string, path: string) => invoke<Instance>("set_custom_jar", { id, path }),
+  clearCustomJar: (id: string) => invoke<Instance>("clear_custom_jar", { id }),
   getInstance: (id: string) => invoke<Instance>("get_instance", { id }),
   /** Resolves to what was added and how many of the pack's mods don't exist for this instance. */
   installPerformanceMods: (id: string) => invoke<{ added: string[]; unavailable: number }>("install_performance_mods", { id }),

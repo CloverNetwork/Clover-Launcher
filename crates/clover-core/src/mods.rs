@@ -820,6 +820,7 @@ mod tests {
             last_played: None,
             installed: false,
             play_seconds: 0,
+            custom_jar: None,
             options: Default::default(),
         }
     }

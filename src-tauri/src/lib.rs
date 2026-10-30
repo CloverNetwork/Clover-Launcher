@@ -471,6 +471,23 @@ fn set_language(app: AppHandle, state: State<'_, AppState>, language: String) ->
     Ok(())
 }
 
+/// Uses a jar the person picked instead of Mojang's client jar.
+#[tauri::command]
+fn set_custom_jar(state: State<'_, AppState>, running: State<'_, Running>, id: String, path: String) -> Result<Instance> {
+    if running.is_running(&id) {
+        return Err(msg("Quit the game first."));
+    }
+    clover_core::custom_jar::set(&state.paths, &id, std::path::Path::new(&path))
+}
+
+#[tauri::command]
+fn clear_custom_jar(state: State<'_, AppState>, running: State<'_, Running>, id: String) -> Result<Instance> {
+    if running.is_running(&id) {
+        return Err(msg("Quit the game first."));
+    }
+    clover_core::custom_jar::clear(&state.paths, &id)
+}
+
 #[tauri::command]
 fn get_instance(state: State<'_, AppState>, id: String) -> Result<Instance> {
     instances::get(&state.paths, &id)
@@ -848,6 +865,8 @@ pub fn run() {
             install_performance_mods,
             discord_built_in,
             get_instance,
+            set_custom_jar,
+            clear_custom_jar,
             set_language,
             has_shortcut,
             development_build,

@@ -4,6 +4,7 @@
 
 pub mod auth;
 pub mod crash;
+pub mod custom_jar;
 pub mod discord;
 pub mod download;
 pub mod error;

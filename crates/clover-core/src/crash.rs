@@ -320,6 +320,7 @@ mod tests {
             last_played: None,
             installed: true,
             play_seconds: 0,
+            custom_jar: None,
             options: Default::default(),
         }
     }

@@ -50,6 +50,7 @@ fn instance(loader: &str, game: &str, loader_version: Option<String>) -> Instanc
         last_played: None,
         installed: false,
         play_seconds: 0,
+        custom_jar: None,
         options: Default::default(),
     }
 }
@@ -359,4 +360,66 @@ async fn quick_play_joins_a_server() {
     .unwrap_or(false);
     let _ = child.kill().await;
     assert!(connected, "the game didn't connect by itself");
+}
+
+/// Boots vanilla from a replacement game jar (a copy of Mojang's), then shows a broken
+/// replacement is what the game really loads by watching it fail.
+/// `cargo test boots_a_replaced_game_jar -- --ignored --nocapture`
+#[tokio::test]
+#[ignore]
+async fn boots_a_replaced_game_jar() {
+    let client = Client::new();
+    let paths = Paths::at(root());
+    let mut instance = instance("vanilla", "1.21.4", None);
+    instance.id = "smoke-custom-jar".into();
+    std::fs::create_dir_all(paths.instance(&instance.id)).unwrap();
+    crate::instances::save(&paths, &instance).unwrap();
+    let installed = crate::install::install(&client, &paths, &Settings::default(), &instance, Verify::Existing, &mut Print).await.unwrap();
+    let mojang = crate::install::client_jar_path(&paths, &installed.resolved);
+
+    let replacement = root().join("Replacement.jar");
+    std::fs::copy(&mojang, &replacement).unwrap();
+    let instance = crate::custom_jar::set(&paths, &instance.id, &replacement).unwrap();
+
+    let start = |instance: &Instance| {
+        let mut command =
+            launch::build_command(&paths, instance, &installed.resolved, &session(), &Settings::default(), &installed.java, None).unwrap();
+        let args: Vec<String> = command.as_std().get_args().map(|a| a.to_string_lossy().into_owned()).collect();
+        let classpath = args[args.iter().position(|a| a == "-cp").unwrap() + 1].clone();
+        command.stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped()).kill_on_drop(true);
+        (command.spawn().unwrap(), classpath)
+    };
+    let (mut child, classpath) = start(&instance);
+    assert!(classpath.contains("smoke-custom-jar/jars/1.21.4.jar"), "{classpath}");
+    assert!(!classpath.contains(&*mojang.to_string_lossy()), "Mojang's jar is off the classpath");
+    let mut lines = BufReader::new(child.stdout.take().unwrap()).lines();
+    let booted = tokio::time::timeout(Duration::from_secs(180), async {
+        let mut log4j = crate::game::Log4jLines::default();
+        while let Ok(Some(raw)) = lines.next_line().await {
+            if log4j.push(&raw).is_some_and(|l| l.contains("Sound engine started")) {
+                return true;
+            }
+        }
+        false
+    })
+    .await
+    .unwrap_or(false);
+    let _ = child.kill().await;
+    assert!(booted, "the game didn't start from the replacement jar");
+    println!("  booted from the replacement jar");
+
+    // A replacement without the game in it: the game can't find its main class.
+    let mut zip = zip::ZipWriter::new(std::fs::File::create(&replacement).unwrap());
+    zip.start_file("Empty.class", zip::write::SimpleFileOptions::default()).unwrap();
+    zip.finish().unwrap();
+    let instance = crate::custom_jar::set(&paths, &instance.id, &replacement).unwrap();
+    let (child, _) = start(&instance);
+    let output = tokio::time::timeout(Duration::from_secs(60), child.wait_with_output()).await.unwrap().unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("net.minecraft.client.main.Main"), "{stderr}");
+    println!("  a broken replacement fails as expected");
+
+    let instance = crate::custom_jar::clear(&paths, &instance.id).unwrap();
+    let (_, classpath) = start(&instance);
+    assert!(classpath.contains(&*mojang.to_string_lossy()), "Mojang's jar is back");
 }

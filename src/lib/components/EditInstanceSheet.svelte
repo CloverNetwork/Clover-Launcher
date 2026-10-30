@@ -3,6 +3,7 @@
   around a launch. Everything left empty uses the defaults from Settings.
 -->
 <script lang="ts">
+  import { open } from "@tauri-apps/plugin-dialog";
   import { api, errorText, type InstanceOptions } from "$lib/api";
   import { launcher } from "$lib/launcher.svelte";
   import VersionPicker from "./VersionPicker.svelte";
@@ -60,6 +61,29 @@
     height = o.height ?? 720;
     preLaunch = o.preLaunch;
     postExit = o.postExit;
+  }
+
+  /** Replacing the game jar takes effect at once, since it copies a file. */
+  async function replaceJar() {
+    if (!instance) return;
+    const path = await open({ title: t("Choose a Game Jar"), filters: [{ name: t("Java Archive"), extensions: ["jar", "zip"] }] });
+    if (typeof path !== "string") return;
+    error = null;
+    try {
+      launcher.replace(await api.setCustomJar(instance.id, path));
+    } catch (err) {
+      error = errorText(err);
+    }
+  }
+
+  async function useMojangJar() {
+    if (!instance) return;
+    error = null;
+    try {
+      launcher.replace(await api.clearCustomJar(instance.id));
+    } catch (err) {
+      error = errorText(err);
+    }
   }
 
   async function save(e: SubmitEvent) {
@@ -121,6 +145,21 @@
         {:else}
           <VersionPicker bind:version bind:loader bind:loaderVersion />
         {/if}
+        <span class="label">{t("Game Jar")}</span>
+        <div>
+          <div class="jar-row">
+            <span class="jar-name" class:secondary={!instance?.customJar} title={instance?.customJar ?? ""}>
+              {instance?.customJar ?? t("Mojang's")}
+            </span>
+            <button type="button" class="button" onclick={replaceJar}>{t("Replace…")}</button>
+            {#if instance?.customJar}
+              <button type="button" class="button" onclick={useMojangJar}>{t("Use Mojang's")}</button>
+            {/if}
+          </div>
+          <p class="hint secondary">
+            {t("A jar to run instead of Minecraft's own, such as a patched client. It must match this Minecraft version. Changes apply right away.")}
+          </p>
+        </div>
       </div>
       {#if instance && !custom && (version !== instance.version || loader !== instance.loader || loaderVersion !== instance.loaderVersion)}
         <p class="note secondary">
@@ -250,6 +289,20 @@
 
   .field.small {
     width: 72px;
+  }
+
+  .jar-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .jar-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .mono {
