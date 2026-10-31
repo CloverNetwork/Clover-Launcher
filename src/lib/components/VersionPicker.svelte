@@ -72,9 +72,20 @@
 <label for="picker-loader">{t("Mod Loader")}</label>
 <select id="picker-loader" class="field" bind:value={loader}>
   <option value="vanilla">{t("None")}</option>
-  {#each launcher.loaders as source (source.id)}
+  <hr />
+  {#each launcher.mainLoaders as source (source.id)}
     <option value={source.id}>{source.name}</option>
   {/each}
+  <hr />
+  {#each launcher.otherLoaders as source (source.id)}
+    <option value={source.id}>{source.name}</option>
+  {/each}
+  {#if launcher.loaders.some((l) => l.custom)}
+    <hr />
+    {#each launcher.loaders.filter((l) => l.custom) as source (source.id)}
+      <option value={source.id}>{source.name}</option>
+    {/each}
+  {/if}
 </select>
 
 {#if loader !== "vanilla"}

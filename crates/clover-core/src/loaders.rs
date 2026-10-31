@@ -73,9 +73,9 @@ fn meta(id: &str, name: &str, url: &str, loader_path: &str) -> LoaderSource {
 pub fn builtin() -> Vec<LoaderSource> {
     vec![
         meta("fabric", "Fabric", "https://meta.fabricmc.net/v2", "loader"),
-        meta("quilt", "Quilt", "https://meta.quiltmc.org/v3", "loader"),
         LoaderSource { id: "neoforge".into(), name: "NeoForge".into(), kind: SourceKind::NeoForge, custom: false },
         LoaderSource { id: "forge".into(), name: "Forge".into(), kind: SourceKind::Forge, custom: false },
+        meta("quilt", "Quilt", "https://meta.quiltmc.org/v3", "loader"),
         meta("legacy-fabric", "Legacy Fabric", "https://meta.legacyfabric.net/v2", "loader"),
         meta("ornithe", "Ornithe", "https://meta.ornithemc.net/v3", "fabric-loader"),
         meta("ornithe-quilt", "Ornithe (Quilt Loader)", "https://meta.ornithemc.net/v3", "quilt-loader"),

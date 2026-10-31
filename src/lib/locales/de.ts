@@ -393,4 +393,6 @@ export const de: Record<string, string> = {
   "Wiki": "Wiki",
   "Discord": "Discord",
   "Website": "Website",
+  "Show Sign-In Window": "Anmeldefenster zeigen",
+  "Sign in to Microsoft in the window that opened. If it asks for a code, enter this one:": "Melde dich im geöffneten Fenster bei Microsoft an. Wenn nach einem Code gefragt wird, gib diesen ein:",
 };

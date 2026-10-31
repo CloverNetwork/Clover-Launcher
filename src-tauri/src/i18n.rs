@@ -31,6 +31,7 @@ pub fn tr(text: &str) -> String {
         "Settings…" => "Einstellungen …",
         "Settings" => "Einstellungen",
         "Preferences" => "Einstellungen",
+        "Sign In with Microsoft" => "Mit Microsoft anmelden",
         "File" => "Ablage",
         "New Instance…" => "Neue Instanz …",
         "Import Modpack…" => "Modpack importieren …",

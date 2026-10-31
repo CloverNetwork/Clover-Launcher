@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { openUrl } from "@tauri-apps/plugin-opener";
+  import { untrack } from "svelte";
   import { api, errorText, type DeviceCode } from "$lib/api";
   import { launcher } from "$lib/launcher.svelte";
   import { t } from "$lib/i18n";
@@ -36,6 +36,8 @@
       dialog?.showModal();
     } else {
       dialog?.close();
+      // Cancelling closes Microsoft's page too.
+      if (untrack(() => code)) api.closeSignInWindow().catch(() => {});
     }
   });
 
@@ -44,7 +46,7 @@
     error = null;
     try {
       code = await api.beginSignIn();
-      await openUrl(code.verificationUri);
+      await api.openSignInWindow(code);
       launcher.setAccounts(await api.finishSignIn(code));
       launcher.accountOpen = false;
     } catch (e) {
@@ -71,14 +73,14 @@
 >
   {#if code}
     <h2 id="account-title">{t("Finish Signing In")}</h2>
-    <p class="secondary">{t("In the browser window that opened, enter this code:")}</p>
+    <p class="secondary">{t("Sign in to Microsoft in the window that opened. If it asks for a code, enter this one:")}</p>
     <div class="code">
       <output aria-label={t("Sign-in code")}>{code.userCode}</output>
       <button class="button" onclick={copyCode}>{copied ? t("Copied") : t("Copy Code")}</button>
     </div>
     <p class="secondary waiting" role="status">{t("Waiting for you to finish on microsoft.com…")}</p>
     <div class="actions">
-      <button class="button" onclick={() => openUrl(code!.verificationUri)}>{t("Open Browser Again")}</button>
+      <button class="button" onclick={() => api.openSignInWindow(code!)}>{t("Show Sign-In Window")}</button>
       <button class="button" onclick={() => (launcher.accountOpen = false)}>{t("Cancel")}</button>
     </div>
   {:else}

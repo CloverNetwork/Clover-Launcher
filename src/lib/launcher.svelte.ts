@@ -36,6 +36,8 @@ function storedSort(): Sort {
 
 type Activity = "verifying" | "launching" | "running";
 
+const MAIN_LOADERS = ["fabric", "neoforge", "forge"];
+
 class Launcher {
   instances = $state<Instance[]>([]);
   selectedId = $state<string | null>(null);
@@ -45,6 +47,9 @@ class Launcher {
   activity = $state<Record<string, Activity>>({});
   progress = $state<Record<string, { stage: string | null; done: number; total: number }>>({});
   loaders = $state<LoaderSource[]>([]);
+  /** The loaders most people use, listed first and apart from the rest. */
+  mainLoaders = $derived(MAIN_LOADERS.flatMap((id) => this.loaders.filter((l) => l.id === id)));
+  otherLoaders = $derived(this.loaders.filter((l) => !l.custom && !MAIN_LOADERS.includes(l.id)));
   logs = $state<Record<string, string[]>>({});
   /** Inline error for the selected instance, shown in the detail view rather than an alert. */
   error = $state<{ instanceId: string; message: string } | null>(null);

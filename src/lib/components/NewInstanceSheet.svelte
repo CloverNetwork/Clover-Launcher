@@ -24,7 +24,6 @@
   let error = $state<string | null>(null);
   let creating = $state(false);
 
-  const builtinLoaders = $derived(launcher.loaders.filter((l) => !l.custom));
   const customLoaders = $derived(launcher.loaders.filter((l) => l.custom));
   const loaderName = $derived(launcher.loaders.find((l) => l.id === loader)?.name ?? "");
   const importing = $derived(loader === IMPORT);
@@ -141,11 +140,14 @@
       <label for="instance-loader">{t("Mod Loader")}</label>
       <select id="instance-loader" class="field" bind:value={loader}>
         <option value="vanilla">{t("None")}</option>
-        <optgroup label={t("Mod Loaders")}>
-          {#each builtinLoaders as source (source.id)}
-            <option value={source.id}>{source.name}</option>
-          {/each}
-        </optgroup>
+        <hr />
+        {#each launcher.mainLoaders as source (source.id)}
+          <option value={source.id}>{source.name}</option>
+        {/each}
+        <hr />
+        {#each launcher.otherLoaders as source (source.id)}
+          <option value={source.id}>{source.name}</option>
+        {/each}
         {#if customLoaders.length}
           <optgroup label={t("Added in Settings")}>
             {#each customLoaders as source (source.id)}
