@@ -180,6 +180,14 @@ class Launcher {
     return `${name} ${version}`.trim();
   }
 
+  /** Back to the instances: every sheet closed, and in the grid layout the grid itself. */
+  closeSheets() {
+    this.newInstanceOpen = this.accountOpen = this.skinsOpen = this.importOpen = this.editOpen = false;
+    this.browse = null;
+    this.dataPacksWorld = null;
+    this.detailOpen = false;
+  }
+
   setLayout(layout: Layout) {
     this.layout = layout;
     this.detailOpen = false;

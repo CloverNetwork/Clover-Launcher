@@ -675,43 +675,15 @@ async fn begin_sign_in(state: State<'_, AppState>) -> Result<auth::DeviceCode> {
 
 #[tauri::command]
 async fn finish_sign_in(app: AppHandle, state: State<'_, AppState>, code: auth::DeviceCode) -> Result<auth::Accounts> {
-    let result = auth::finish(&state.http, &state.paths, &code.device_code, code.interval, code.expires_in).await;
-    // Signed in, timed out or turned down: either way the Microsoft page has done its job.
-    close_sign_in_window(app.clone());
-    result?;
+    auth::finish(&state.http, &state.paths, &code.device_code, code.interval, code.expires_in).await?;
+    // Sign-in finished in the browser; bring Clover back in front of it.
+    if let Some(main) = app.get_webview_window("main") {
+        let _ = main.unminimize();
+        let _ = main.show();
+        let _ = main.set_focus();
+    }
     accounts_changed(&app, &state.paths)
 }
-
-/// Microsoft's code page in a window of Clover's own, with the code filled in, so it can be
-/// closed again once sign-in finishes. A browser tab would stay open.
-#[tauri::command]
-async fn open_sign_in_window(app: AppHandle, code: auth::DeviceCode) -> Result<()> {
-    if let Some(window) = app.get_webview_window(SIGN_IN_WINDOW) {
-        let _ = window.unminimize();
-        return window.set_focus().map_err(|e| msg(e.to_string()));
-    }
-    let url = format!("{}?otc={}", code.verification_uri, code.user_code);
-    let url = url.parse().map_err(|_| msg("Microsoft sent an unusable sign-in address."))?;
-    let mut builder = tauri::WebviewWindowBuilder::new(&app, SIGN_IN_WINDOW, tauri::WebviewUrl::External(url))
-        .title(i18n::tr("Sign In with Microsoft"))
-        .inner_size(480.0, 640.0)
-        .minimizable(false)
-        .maximizable(false);
-    if let Some(main) = app.get_webview_window("main") {
-        builder = builder.parent(&main).map_err(|e| msg(e.to_string()))?;
-    }
-    builder.build().map_err(|e| msg(e.to_string()))?;
-    Ok(())
-}
-
-#[tauri::command]
-fn close_sign_in_window(app: AppHandle) {
-    if let Some(window) = app.get_webview_window(SIGN_IN_WINDOW) {
-        let _ = window.close();
-    }
-}
-
-const SIGN_IN_WINDOW: &str = "sign-in";
 
 /// Whether this is a development build, which allows offline accounts and skips update checks.
 #[tauri::command]
@@ -932,8 +904,6 @@ pub fn run() {
             finish_sign_in,
             sign_in_offline,
             open_settings,
-            open_sign_in_window,
-            close_sign_in_window,
             window_chrome,
             quit,
             take_pending_launch,

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { untrack } from "svelte";
+  import { openUrl } from "@tauri-apps/plugin-opener";
   import { api, errorText, type DeviceCode } from "$lib/api";
   import { launcher } from "$lib/launcher.svelte";
   import { t } from "$lib/i18n";
@@ -36,8 +36,6 @@
       dialog?.showModal();
     } else {
       dialog?.close();
-      // Cancelling closes Microsoft's page too.
-      if (untrack(() => code)) api.closeSignInWindow().catch(() => {});
     }
   });
 
@@ -46,9 +44,11 @@
     error = null;
     try {
       code = await api.beginSignIn();
-      await api.openSignInWindow(code);
+      await openBrowser(code);
       launcher.setAccounts(await api.finishSignIn(code));
+      // Back to the instances, with any other sheet out of the way too.
       launcher.accountOpen = false;
+      launcher.closeSheets();
     } catch (e) {
       code = null;
       error = errorText(e);
@@ -56,6 +56,9 @@
       starting = false;
     }
   }
+
+  /** microsoft.com/link in the default browser, with the code already filled in. */
+  const openBrowser = (code: DeviceCode) => openUrl(`${code.verificationUri}?otc=${encodeURIComponent(code.userCode)}`);
 
   async function copyCode() {
     if (!code) return;
@@ -73,14 +76,14 @@
 >
   {#if code}
     <h2 id="account-title">{t("Finish Signing In")}</h2>
-    <p class="secondary">{t("Sign in to Microsoft in the window that opened. If it asks for a code, enter this one:")}</p>
+    <p class="secondary">{t("In the browser window that opened, enter this code:")}</p>
     <div class="code">
       <output aria-label={t("Sign-in code")}>{code.userCode}</output>
       <button class="button" onclick={copyCode}>{copied ? t("Copied") : t("Copy Code")}</button>
     </div>
     <p class="secondary waiting" role="status">{t("Waiting for you to finish on microsoft.com…")}</p>
     <div class="actions">
-      <button class="button" onclick={() => api.openSignInWindow(code!)}>{t("Show Sign-In Window")}</button>
+      <button class="button" onclick={() => openBrowser(code!)}>{t("Open Browser Again")}</button>
       <button class="button" onclick={() => (launcher.accountOpen = false)}>{t("Cancel")}</button>
     </div>
   {:else}

@@ -262,8 +262,6 @@ export const api = {
   developmentBuild: () => invoke<boolean>("development_build"),
   signInOffline: (name: string) => invoke<Accounts>("sign_in_offline", { name }),
   openSettings: () => invoke<void>("open_settings"),
-  openSignInWindow: (code: DeviceCode) => invoke<void>("open_sign_in_window", { code }),
-  closeSignInWindow: () => invoke<void>("close_sign_in_window"),
   windowChrome: () => invoke<WindowChrome>("window_chrome"),
   /** An instance named with --launch when Clover started, once. */
   takePendingLaunch: () => invoke<string | null>("take_pending_launch"),
