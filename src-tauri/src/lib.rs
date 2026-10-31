@@ -19,7 +19,6 @@ use clover_core::settings::{self, Settings};
 use clover_core::{auth, crash, export, servers, hooks, install, launch, mclogs, mod_info, modpacks, mods, skins, worlds};
 use reqwest::Client;
 use tauri::{AppHandle, Emitter, Manager, State};
-use tauri_plugin_opener::OpenerExt;
 
 use crate::events::{AppReporter, ImportReporter};
 

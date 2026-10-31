@@ -152,6 +152,24 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # RPM and MSI only take plain numbers like 1.2.3, so a pre-release such as 1.2.3-beta.1
+      # skips them; the AppImage, .deb and NSIS installer (which the updater uses) still build.
+      - name: Pick installers
+        id: bundles
+        shell: bash
+        env:
+          TAG: ${{ needs.prepare.outputs.tag }}
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          args=""
+          if [[ "$TAG" == *-* ]]; then
+            case "$PLATFORM" in
+              ubuntu-*) args="--bundles deb,appimage" ;;
+              windows-*) args="--bundles nsis" ;;
+            esac
+          fi
+          echo "args=$args" >> "$GITHUB_OUTPUT"
+
       - uses: tauri-apps/tauri-action@action-v1.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -169,4 +187,4 @@ jobs:
           releaseDraft: ${{ inputs.draft == true }}
           prerelease: ${{ inputs.prerelease == true }}
           tauriScript: pnpm tauri
-          args: ${{ matrix.args }}
+          args: ${{ matrix.args }} ${{ steps.bundles.outputs.args }}
