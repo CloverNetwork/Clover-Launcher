@@ -44,7 +44,7 @@
     error = null;
     try {
       code = await api.beginSignIn();
-      await openBrowser(code);
+      await openBrowser();
       launcher.setAccounts(await api.finishSignIn(code));
       // Back to the instances, with any other sheet out of the way too.
       launcher.accountOpen = false;
@@ -57,8 +57,8 @@
     }
   }
 
-  /** microsoft.com/link in the default browser, with the code already filled in. */
-  const openBrowser = (code: DeviceCode) => openUrl(`${code.verificationUri}?otc=${encodeURIComponent(code.userCode)}`);
+  /** Microsoft's page for entering the code, in the default browser. */
+  const openBrowser = () => openUrl("https://microsoft.com/link");
 
   async function copyCode() {
     if (!code) return;
@@ -83,7 +83,7 @@
     </div>
     <p class="secondary waiting" role="status">{t("Waiting for you to finish on microsoft.com…")}</p>
     <div class="actions">
-      <button class="button" onclick={() => openBrowser(code!)}>{t("Open Browser Again")}</button>
+      <button class="button" onclick={openBrowser}>{t("Open Browser Again")}</button>
       <button class="button" onclick={() => (launcher.accountOpen = false)}>{t("Cancel")}</button>
     </div>
   {:else}
