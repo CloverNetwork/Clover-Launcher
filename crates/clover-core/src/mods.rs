@@ -611,7 +611,7 @@ pub struct UpdateCheck {
     pub skipped: Option<String>,
 }
 
-fn file_on_disk(dir: &Path, file: &str) -> PathBuf {
+pub(crate) fn file_on_disk(dir: &Path, file: &str) -> PathBuf {
     let enabled = dir.join(file);
     if enabled.exists() { enabled } else { dir.join(format!("{file}.disabled")) }
 }

@@ -8,6 +8,7 @@
   import { launcher } from "$lib/launcher.svelte";
   import BlockIcon from "./BlockIcon.svelte";
   import Icon from "./Icon.svelte";
+  import ModInfoSheet from "./ModInfoSheet.svelte";
   import { t } from "$lib/i18n";
 
   let { instance, place, subtitle }: { instance: Instance; place: Place; subtitle?: string } = $props();
@@ -18,6 +19,8 @@
   let checking = $state(false);
   let updating = $state<Set<string>>(new Set());
   let status = $state<string | null>(null);
+  /** The file whose info sheet is open. */
+  let shown = $state<InstalledMod | null>(null);
   const names = $derived(CONTENT[place.kind]);
   const isMods = $derived(place.kind === "mod");
   const titleId = $derived(`content-title-${place.kind}`);
@@ -115,6 +118,7 @@
     try {
       await api.removeMod(instance.id, place, mod.file);
       mods = mods.filter((m) => m.file !== mod.file);
+      if (shown?.file === mod.file) shown = null;
     } catch (e) {
       error = errorText(e);
     }
@@ -128,6 +132,8 @@
         ...(update
           ? [{ id: "update", text: t("Update to {version}", { version: update.newVersion }), enabled: !running, action: () => applyUpdates([update]) }]
           : []),
+        { id: "info", text: t("Get Info"), action: () => (shown = mod) },
+        { item: "Separator" },
         { id: "toggle", text: mod.enabled ? t("Turn Off") : t("Turn On"), action: () => toggle(mod) },
         { item: "Separator" },
         { id: "remove", text: t("Remove"), action: () => remove(mod) },
@@ -190,22 +196,24 @@
       {#each mods as mod (mod.file)}
         {@const update = updateFor(mod)}
         <li class:off={!mod.enabled} oncontextmenu={(e) => showMenu(e, mod)}>
-          {#if mod.iconUrl}
-            <img src={mod.iconUrl} alt="" width="32" height="32" loading="lazy" />
-          {:else}
-            <BlockIcon seed={mod.file} size={32} />
-          {/if}
-          <div class="text">
-            <span class="title">{mod.title}</span>
-            <span class="secondary detail">
-              {#if update}
-                <span class="new">{mod.version ?? update.currentVersion ?? mod.file} → {update.newVersion}</span>
-              {:else}
-                {mod.version ?? mod.file}
-              {/if}
-              · {sourceName(mod)}{mod.dependency ? ` · ${t("Required by another mod")}` : ""}
+          <button class="info" title={t("Get Info")} onclick={() => (shown = mod)}>
+            {#if mod.iconUrl}
+              <img src={mod.iconUrl} alt="" width="32" height="32" loading="lazy" />
+            {:else}
+              <BlockIcon seed={mod.file} size={32} />
+            {/if}
+            <span class="text">
+              <span class="title">{mod.title}</span>
+              <span class="secondary detail">
+                {#if update}
+                  <span class="new">{mod.version ?? update.currentVersion ?? mod.file} → {update.newVersion}</span>
+                {:else}
+                  {mod.version ?? mod.file}
+                {/if}
+                · {sourceName(mod)}{mod.dependency ? ` · ${t("Required by another mod")}` : ""}
+              </span>
             </span>
-          </div>
+          </button>
           {#if update}
             <button
               class="button update"
@@ -230,6 +238,21 @@
     <p class="empty secondary">{t("No {things} yet. Add some from Modrinth or CurseForge, or drop files in the folder.", { things: names.plural })}</p>
   {/if}
 </section>
+
+<ModInfoSheet
+  instanceId={instance.id}
+  {place}
+  mod={shown}
+  update={shown ? updateFor(shown) : undefined}
+  {running}
+  onclose={() => (shown = null)}
+  ontoggle={toggle}
+  onremove={remove}
+  onupdate={(u) => {
+    shown = null;
+    applyUpdates([u]);
+  }}
+/>
 
 <style>
   .mods {
@@ -293,6 +316,33 @@
     flex: none;
     border-radius: 6px;
     object-fit: cover;
+  }
+
+  /* The icon and name open the info sheet; the whole area is one button. */
+  .info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: -4px;
+    padding: 4px;
+    border: none;
+    border-radius: 8px;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .info:hover {
+    background: var(--bg-control-hover);
+  }
+
+  .info:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
   }
 
   .text {

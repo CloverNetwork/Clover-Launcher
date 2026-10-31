@@ -141,6 +141,22 @@ export type InstalledMod = {
   dependency: boolean;
   enabled: boolean;
 };
+export type ModDetails = {
+  title: string;
+  summary: string | null;
+  authors: string[];
+  version: string | null;
+  license: string | null;
+  iconUrl: string | null;
+  downloads: number | null;
+  categories: string[];
+  gallery: string[];
+  links: { label: string; url: string }[];
+  modIds: string[];
+  size: number;
+  source: ModSource | null;
+  onlineError: string | null;
+};
 export type Profile = { uuid: string; name: string; offline: boolean };
 export type Accounts = { active: string | null; accounts: Profile[] };
 export type SkinVariant = "classic" | "slim";
@@ -183,6 +199,7 @@ export const api = {
   searchMods: (id: string, place: Place, source: ModSource, query: string, offset: number) =>
     invoke<ModPage>("search_mods", { id, place, source, query, offset }),
   listMods: (id: string, place = MODS) => invoke<InstalledMod[]>("list_mods", { id, place }),
+  modDetails: (id: string, place: Place, file: string) => invoke<ModDetails>("mod_details", { id, place, file }),
   /** Rejects with CurseForge's reason when the key doesn't work. */
   checkCurseforgeKey: (key: string) => invoke<void>("check_curseforge_key", { key }),
   /** Resolves to the titles of everything added, dependencies included. */

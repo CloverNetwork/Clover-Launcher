@@ -16,7 +16,7 @@ use clover_core::loaders::{self, LoaderSource, LoaderVersion};
 use clover_core::manifest::{self, VersionEntry};
 use clover_core::paths::Paths;
 use clover_core::settings::{self, Settings};
-use clover_core::{auth, crash, export, servers, hooks, install, launch, mclogs, modpacks, mods, skins, worlds};
+use clover_core::{auth, crash, export, servers, hooks, install, launch, mclogs, mod_info, modpacks, mods, skins, worlds};
 use reqwest::Client;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_opener::OpenerExt;
@@ -312,6 +312,15 @@ async fn search_mods(
 fn list_mods(state: State<'_, AppState>, id: String, place: Option<Place>) -> Result<Vec<mods::InstalledMod>> {
     let instance = instances::get(&state.paths, &id)?;
     mods::installed(&place.unwrap_or_default().shelf(&state.paths, &instance)?)
+}
+
+/// What one installed file is, from its project page or its own metadata.
+#[tauri::command]
+async fn mod_details(state: State<'_, AppState>, id: String, place: Option<Place>, file: String) -> Result<mod_info::ModDetails> {
+    let instance = instances::get(&state.paths, &id)?;
+    let settings = settings::load(&state.paths);
+    let shelf = place.unwrap_or_default().shelf(&state.paths, &instance)?;
+    mod_info::details(&sites(&state, &settings), &shelf, &file).await
 }
 
 /// Installs a mod or pack, and a mod's required dependencies. Returns the titles of what was added.
@@ -852,6 +861,7 @@ pub fn run() {
             set_mod_enabled,
             remove_mod,
             show_mods_folder,
+            mod_details,
             list_worlds,
             backup_world,
             trash_world,

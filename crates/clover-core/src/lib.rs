@@ -19,6 +19,7 @@ pub mod launch;
 pub mod loaders;
 pub mod manifest;
 pub mod mclogs;
+pub mod mod_info;
 pub mod modpacks;
 pub mod mods;
 pub mod paths;
