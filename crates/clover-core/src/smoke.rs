@@ -197,6 +197,13 @@ async fn boots_forge() {
     boots("forge", "1.21.4", "ModLauncher").await;
 }
 
+/// Forge before 1.12.2's late builds ships its old installer format.
+#[tokio::test]
+#[ignore]
+async fn boots_old_forge() {
+    boots("forge", "1.8.9", "Forge Mod Loader").await;
+}
+
 #[tokio::test]
 #[ignore]
 async fn boots_legacy_fabric() {

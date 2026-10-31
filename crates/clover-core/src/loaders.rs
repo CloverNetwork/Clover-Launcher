@@ -319,7 +319,16 @@ async fn run_installer(
     let installer = paths.root.join("installers").join(file_name);
     download::fetch(client, Task { url: url.into(), path: installer.clone(), sha1: None }, Verify::Existing).await?;
 
-    let id = installer_profile_id(&installer)?;
+    let install_profile = read_install_profile(&installer)?;
+    // Installers before 2018 hold a finished profile and the loader's jar instead of a program.
+    if install_profile.get("versionInfo").is_some() {
+        return install_legacy(paths, &installer, &install_profile);
+    }
+    let id = install_profile
+        .get("version")
+        .and_then(|v| v.as_str())
+        .map(String::from)
+        .ok_or_else(|| msg("That installer's install profile has no version."))?;
     // Verifying reruns the installer, which regenerates its patched files.
     if verify == Verify::Existing && profile::json_path(paths, &id).exists() {
         return Ok(id);
@@ -381,15 +390,45 @@ async fn run_installer(
     Ok(id)
 }
 
-fn installer_profile_id(installer: &Path) -> Result<String> {
+fn read_install_profile(installer: &Path) -> Result<serde_json::Value> {
     let mut archive = zip::ZipArchive::new(std::fs::File::open(installer)?)?;
     let file = archive.by_name("install_profile.json").map_err(|_| msg("That installer has no install profile."))?;
-    let json: serde_json::Value = serde_json::from_reader(file)?;
-    json.get("version")
-        .and_then(|v| v.as_str())
-        .map(String::from)
-        // Installers before 2018 use a format that can't install headlessly.
-        .ok_or_else(|| msg("This loader version is too old to install automatically. Pick a newer one."))
+    Ok(serde_json::from_reader(file)?)
+}
+
+/// Forge's old installers (up to 1.12.2's early builds) carry the profile as `versionInfo`
+/// and the loader itself as a jar inside the installer, named by `install.filePath`. The
+/// launcher that ran them copied both into place; this does the same.
+fn install_legacy(paths: &Paths, installer: &Path, install_profile: &serde_json::Value) -> Result<String> {
+    let broken = || msg("That installer's install profile is incomplete.");
+    let install = install_profile.get("install").ok_or_else(broken)?;
+    let coordinate = install.get("path").and_then(|v| v.as_str()).ok_or_else(broken)?;
+    let inner = install.get("filePath").and_then(|v| v.as_str()).ok_or_else(broken)?;
+    let jar_path = crate::manifest::maven_path(coordinate).ok_or_else(broken)?;
+
+    let target = paths.libraries().join(&jar_path);
+    std::fs::create_dir_all(target.parent().unwrap_or(Path::new(".")))?;
+    let mut archive = zip::ZipArchive::new(std::fs::File::open(installer)?)?;
+    let mut entry = archive.by_name(inner).map_err(|_| broken())?;
+    let partial = target.with_extension("jar.part");
+    std::io::copy(&mut entry, &mut std::fs::File::create(&partial)?)?;
+    std::fs::rename(&partial, &target)?;
+
+    let mut version = install_profile["versionInfo"].clone();
+    for library in version.get_mut("libraries").and_then(|l| l.as_array_mut()).into_iter().flatten() {
+        let Some(library) = library.as_object_mut() else { continue };
+        if library.get("name").and_then(|n| n.as_str()) == Some(coordinate) {
+            // The loader's own jar came out of the installer and can't be downloaded.
+            library.insert("downloads".into(), serde_json::json!({ "artifact": { "path": jar_path, "url": "" } }));
+            library.remove("url");
+        } else if let Some(url) = library.get("url").and_then(|u| u.as_str()) {
+            // Forge's maven moved; the old address no longer answers.
+            if url.contains("files.minecraftforge.net") {
+                library.insert("url".into(), "https://maven.minecraftforge.net/".into());
+            }
+        }
+    }
+    save_profile(paths, &serde_json::to_vec_pretty(&version)?)
 }
 
 #[cfg(test)]
