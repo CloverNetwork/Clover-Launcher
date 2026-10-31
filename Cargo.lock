@@ -500,7 +500,7 @@ dependencies = [
 
 [[package]]
 name = "clover-core"
-version = "0.0.2"
+version = "0.0.3-pre"
 dependencies = [
  "base64 0.22.1",
  "bytes",
@@ -527,7 +527,7 @@ dependencies = [
 
 [[package]]
 name = "clover-launcher"
-version = "0.0.2"
+version = "0.0.3-pre"
 dependencies = [
  "clover-core",
  "reqwest 0.12.28",
