@@ -77,7 +77,10 @@ jobs:
           git diff --stat
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -am "Release v$VERSION"
+          # Rerunning a version whose release was deleted finds the files already set.
+          if ! git diff --quiet; then
+            git commit -am "Release v$VERSION"
+          fi
           git tag "v$VERSION"
           git push origin HEAD "v$VERSION"
 
