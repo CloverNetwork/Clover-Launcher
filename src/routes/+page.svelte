@@ -207,11 +207,9 @@
             : t("Updating {percent} %", { percent: Math.round(updates.progress * 100) })}
         </button>
       {/if}
-      {#if !hasMenuBar}
-        <button class="icon-button" aria-label={SETTINGS} title={SETTINGS} onclick={() => api.openSettings()}>
-          <Icon name="gear" />
-        </button>
-      {/if}
+      <button class="icon-button" aria-label={SETTINGS} title={SETTINGS} onclick={() => api.openSettings()}>
+        <Icon name="gear" />
+      </button>
       <button
         class="account"
         aria-haspopup={launcher.accounts.length ? "menu" : "dialog"}
